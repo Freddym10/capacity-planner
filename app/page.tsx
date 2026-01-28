@@ -94,7 +94,7 @@ export default function QuotaCapacityPlanner() {
   const calculateCapacity = () => {
     const results: any[] = [];
     
-    reps.filter((r: any) => r.role === 'AE').forEach((rep: any) => {
+    reps.filter(r => r.role === 'AE').forEach(rep => {
       const ramped = calculateRampedQuota(rep);
       results.push({
         ...rep,
@@ -103,9 +103,9 @@ export default function QuotaCapacityPlanner() {
       });
     });
     
-    reps.filter((r: any) => r.role === 'Manager').forEach((mgr: any) => {
-      const directs = results.filter((r: any) => r.reportsTo === mgr.name);
-      const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
+    reps.filter(r => r.role === 'Manager').forEach(mgr => {
+      const directs = results.filter(r => r.reportsTo === mgr.name);
+      const total = directs.reduce((sum, r) => sum + r.effectiveQuota, 0);
       const effective = total * (1 - mgr.haircut / 100);
       
       results.push({
@@ -116,9 +116,9 @@ export default function QuotaCapacityPlanner() {
       });
     });
     
-    reps.filter((r: any) => r.role === 'Director').forEach((dir: any) => {
-      const directs = results.filter((r: any) => r.reportsTo === dir.name);
-      const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
+    reps.filter(r => r.role === 'Director').forEach(dir => {
+      const directs = results.filter(r => r.reportsTo === dir.name);
+      const total = directs.reduce((sum, r) => sum + r.effectiveQuota, 0);
       const effective = total * (1 - dir.haircut / 100);
       
       results.push({
@@ -129,9 +129,9 @@ export default function QuotaCapacityPlanner() {
       });
     });
     
-    reps.filter((r: any) => r.role === 'VP').forEach((vp: any) => {
-      const directs = results.filter((r: any) => r.reportsTo === vp.name);
-      const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
+    reps.filter(r => r.role === 'VP').forEach(vp => {
+      const directs = results.filter(r => r.reportsTo === vp.name);
+      const total = directs.reduce((sum, r) => sum + r.effectiveQuota, 0);
       const effective = total * (1 - vp.haircut / 100);
       
       results.push({
@@ -146,9 +146,9 @@ export default function QuotaCapacityPlanner() {
   };
 
   const capacity = calculateCapacity();
-  const totalAEQuota = reps.filter((r: any) => r.role === 'AE').reduce((sum: number, r: any) => sum + r.quota, 0);
-  const totalRamped = capacity.filter((r: any) => r.role === 'AE').reduce((sum: number, r: any) => sum + r.rampedQuota, 0);
-  const vp = capacity.find((r: any) => r.role === 'VP');
+  const totalAEQuota = reps.filter(r => r.role === 'AE').reduce((sum, r) => sum + r.quota, 0);
+  const totalRamped = capacity.filter(r => r.role === 'AE').reduce((sum, r) => sum + r.rampedQuota, 0);
+  const vp = capacity.find(r => r.role === 'VP');
   const totalEffective = vp?.effectiveQuota || 0;
 
   const handleCsvUpload = () => {
@@ -175,7 +175,7 @@ export default function QuotaCapacityPlanner() {
 
   const exportCSV = () => {
     const headers = 'Name,Segment,Role,Annual Quota,Ramped Quota,Effective Quota\n';
-    const rows = capacity.map((r: any) => 
+    const rows = capacity.map(r => 
       `${r.name},${r.segment},${r.role},${r.quota},${Math.round(r.rampedQuota)},${Math.round(r.effectiveQuota)}`
     ).join('\n');
     
@@ -203,10 +203,10 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   };
 
   const getRepDetails = (repName: string) => {
-    const rep = capacity.find((r: any) => r.name === repName);
+    const rep = capacity.find(r => r.name === repName);
     if (!rep) return null;
     
-    const mgr = reps.find((r: any) => r.name === rep.reportsTo);
+    const mgr = reps.find(r => r.name === rep.reportsTo);
     const start = new Date(rep.startDate);
     const now = new Date('2025-01-20');
     const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
@@ -220,28 +220,28 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     };
   };
 
-  const aeReps = reps.filter((r: any) => r.role === 'AE');
+  const aeReps = reps.filter(r => r.role === 'AE');
 
-  // Get unique team names dynamically - FIXED: Added explicit string[] type annotation
-  const uniqueTeams: string[] = [...new Set(aeReps.map((r: any) => r.segment))].sort();
+  // Get unique team names dynamically
+  const uniqueTeams = [...new Set(aeReps.map(r => r.segment))].sort();
 
   // Calculate quick stats for grid view
   const quickStats = {
     totalAEs: aeReps.length,
-    fullyRamped: aeReps.filter((rep: any) => {
+    fullyRamped: aeReps.filter(rep => {
       const start = new Date(rep.startDate);
       const now = new Date('2025-01-20');
       const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
       return monthsSince >= rep.rampMonths;
     }).length,
-    ramping: aeReps.filter((rep: any) => {
+    ramping: aeReps.filter(rep => {
       const start = new Date(rep.startDate);
       const now = new Date('2025-01-20');
       const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
       return monthsSince < rep.rampMonths && monthsSince >= 0;
     }).length,
     totalTeams: uniqueTeams.length,
-    avgRamp: aeReps.length > 0 ? (aeReps.reduce((sum: number, r: any) => sum + r.rampMonths, 0) / aeReps.length).toFixed(1) : 0,
+    avgRamp: aeReps.length > 0 ? (aeReps.reduce((sum, r) => sum + r.rampMonths, 0) / aeReps.length).toFixed(1) : 0,
     totalCapacity: totalRamped,
     effectiveCapacity: totalEffective
   };
@@ -415,7 +415,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                   </thead>
                   <tbody>
                     {uniqueTeams.map((teamName, teamIndex) => {
-                      const teamReps = aeReps.filter((r: any) => r.segment === teamName);
+                      const teamReps = aeReps.filter(r => r.segment === teamName);
                       const colors = ['blue', 'green', 'purple', 'orange', 'pink', 'indigo'];
                       const color = colors[teamIndex % colors.length];
                       
@@ -424,7 +424,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                           <tr className={`bg-${color}-50`}>
                             <td colSpan={6} className="px-4 py-2 font-bold">{teamName}</td>
                           </tr>
-                          {teamReps.map((rep: any, i: number) => {
+                          {teamReps.map((rep, i) => {
                             const q = [0,1,2,3].map(qi => getQuarterlyQuota(rep, qi));
                             const tot = q.reduce((s, v) => s + v, 0);
                             return (
@@ -444,10 +444,10 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                     
                     <tr className="bg-gray-800 text-white font-bold">
                       <td className="px-4 py-3">TOTAL</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 0), 0))}</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 1), 0))}</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 2), 0))}</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 3), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 0), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 1), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 2), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 3), 0))}</td>
                       <td className="px-4 py-3 text-right">{fmt(totalRamped)}</td>
                     </tr>
                   </tbody>
@@ -518,7 +518,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                   </tr>
                 </thead>
                 <tbody>
-                  {capacity.map((rep: any, i: number) => (
+                  {capacity.map((rep, i) => (
                     <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
                       <td className="px-6 py-4">{rep.name}</td>
                       <td className="px-6 py-4">{rep.role}</td>
@@ -537,17 +537,17 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-sm text-gray-600">
-              <strong className="text-gray-900">CapacityPro</strong> — Built for Revenue Operations
-            </div>
-            <div className="flex gap-6 text-sm text-gray-500">
-              <span>v1.0.0</span>
-              <span>•</span>
-              <span>© 2025</span>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
+<div className="text-sm text-gray-600">
+<strong className="text-gray-900">CapacityPro</strong> — Built for Revenue Operations
+</div>
+<div className="flex gap-6 text-sm text-gray-500">
+<span>v1.0.0</span>
+<span>•</span>
+<span>© 2025</span>
+</div>
+</div>
+</div>
+</footer>
+</div>
+);
 }
