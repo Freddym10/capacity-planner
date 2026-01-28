@@ -1,29 +1,56 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function QuotaCapacityPlanner() {
   const [activeView, setActiveView] = useState('grid');
   const [selectedRep, setSelectedRep] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
   
-  const [reps, setReps] = useState([
-    { name: 'Sarah Chen', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2025-01-01', quota: 1200000, rampMonths: 5, haircut: 0 },
-    { name: 'James Liu', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2024-10-01', quota: 1200000, rampMonths: 5, haircut: 0 },
-    { name: 'Mike Johnson', segment: 'Enterprise', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
-    
-    { name: 'Emily Rodriguez', segment: 'Mid-Market', role: 'AE', reportsTo: 'Lisa Park', startDate: '2024-11-01', quota: 800000, rampMonths: 4, haircut: 0 },
-    { name: 'David Kim', segment: 'Mid-Market', role: 'AE', reportsTo: 'Lisa Park', startDate: '2024-08-01', quota: 800000, rampMonths: 4, haircut: 0 },
-    { name: 'Lisa Park', segment: 'Mid-Market', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
-    
-    { name: 'Chris Taylor', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2024-09-01', quota: 500000, rampMonths: 3, haircut: 0 },
-    { name: 'Morgan Smith', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2025-01-15', quota: 500000, rampMonths: 3, haircut: 0 },
-    { name: 'Jessica Wu', segment: 'Commercial', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
-    
-    { name: 'Robert Chen', segment: 'All', role: 'Director', reportsTo: 'Jennifer Martinez', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 15 },
-    { name: 'Jennifer Martinez', segment: 'All', role: 'VP', reportsTo: '', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 20 }
-  ]);
+  const [reps, setReps] = useState(() => {
+    // Try to load from localStorage first
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('capacityPlannerReps');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Error loading saved data:', e);
+        }
+      }
+    }
+    // Default data if nothing saved
+    return [
+      { name: 'Sarah Chen', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2025-01-01', quota: 1200000, rampMonths: 5, haircut: 0 },
+      { name: 'James Liu', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2024-10-01', quota: 1200000, rampMonths: 5, haircut: 0 },
+      { name: 'Mike Johnson', segment: 'Enterprise', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
+      
+      { name: 'Emily Rodriguez', segment: 'Mid-Market', role: 'AE', reportsTo: 'Lisa Park', startDate: '2024-11-01', quota: 800000, rampMonths: 4, haircut: 0 },
+      { name: 'David Kim', segment: 'Mid-Market', role: 'AE', reportsTo: 'Lisa Park', startDate: '2024-08-01', quota: 800000, rampMonths: 4, haircut: 0 },
+      { name: 'Lisa Park', segment: 'Mid-Market', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
+      
+      { name: 'Chris Taylor', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2024-09-01', quota: 500000, rampMonths: 3, haircut: 0 },
+      { name: 'Morgan Smith', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2025-01-15', quota: 500000, rampMonths: 3, haircut: 0 },
+      { name: 'Jessica Wu', segment: 'Commercial', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
+      
+      { name: 'Robert Chen', segment: 'All', role: 'Director', reportsTo: 'Jennifer Martinez', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 15 },
+      { name: 'Jennifer Martinez', segment: 'All', role: 'VP', reportsTo: '', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 20 }
+    ];
+  });
 
   const [csvInput, setCsvInput] = useState('');
+
+  // Wait for client-side mount to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Auto-save to localStorage whenever reps change
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('capacityPlannerReps', JSON.stringify(reps));
+    }
+  }, [reps, mounted]);
 
   const fmt = (n: number) => '$' + (n / 1000000).toFixed(2) + 'M';
   const fmtK = (n: number) => '$' + Math.round(n / 1000) + 'K';
@@ -160,6 +187,21 @@ export default function QuotaCapacityPlanner() {
     a.click();
   };
 
+  const downloadTemplate = () => {
+    const template = `name,segment,role,reportsTo,startDate,quota,rampMonths,haircut
+John Doe,Sales Team A,AE,Jane Smith,2025-01-01,1000000,4,0
+Jane Smith,Sales Team A,Manager,Bob Johnson,2024-01-01,0,0,10
+Bob Johnson,Sales Team A,Director,Mary Wilson,2024-01-01,0,0,15
+Mary Wilson,All,VP,,2024-01-01,0,0,20`;
+    
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'capacity_planner_template.csv';
+    a.click();
+  };
+
   const getRepDetails = (repName: string) => {
     const rep = capacity.find(r => r.name === repName);
     if (!rep) return null;
@@ -179,6 +221,18 @@ export default function QuotaCapacityPlanner() {
   };
 
   const aeReps = reps.filter(r => r.role === 'AE');
+
+  // Get unique team names dynamically
+  const uniqueTeams = [...new Set(aeReps.map(r => r.segment))].sort();
+
+  // Show loading state until mounted on client
+  if (!mounted) {
+    return (
+      <div className="w-full min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-gray-50 p-6">
@@ -285,57 +339,31 @@ export default function QuotaCapacityPlanner() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="bg-blue-50">
-                    <td colSpan={6} className="px-4 py-2 font-bold">Commercial</td>
-                  </tr>
-                  {aeReps.filter(r => r.segment === 'Commercial').map((rep, i) => {
-                    const q = [0,1,2,3].map(q => getQuarterlyQuota(rep, q));
-                    const tot = q.reduce((s, v) => s + v, 0);
+                  {uniqueTeams.map((teamName, teamIndex) => {
+                    const teamReps = aeReps.filter(r => r.segment === teamName);
+                    const colors = ['blue', 'green', 'purple', 'orange', 'pink', 'indigo'];
+                    const color = colors[teamIndex % colors.length];
+                    
                     return (
-                      <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                        <td className="px-4 py-2">{rep.name}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[0])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[1])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[2])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[3])}</td>
-                        <td className="px-4 py-2 text-right font-semibold bg-blue-50">{fmtK(tot)}</td>
-                      </tr>
-                    );
-                  })}
-                  
-                  <tr className="bg-green-50">
-                    <td colSpan={6} className="px-4 py-2 font-bold">Mid-Market</td>
-                  </tr>
-                  {aeReps.filter(r => r.segment === 'Mid-Market').map((rep, i) => {
-                    const q = [0,1,2,3].map(q => getQuarterlyQuota(rep, q));
-                    const tot = q.reduce((s, v) => s + v, 0);
-                    return (
-                      <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                        <td className="px-4 py-2">{rep.name}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[0])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[1])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[2])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[3])}</td>
-                        <td className="px-4 py-2 text-right font-semibold bg-green-50">{fmtK(tot)}</td>
-                      </tr>
-                    );
-                  })}
-                  
-                  <tr className="bg-purple-50">
-                    <td colSpan={6} className="px-4 py-2 font-bold">Enterprise</td>
-                  </tr>
-                  {aeReps.filter(r => r.segment === 'Enterprise').map((rep, i) => {
-                    const q = [0,1,2,3].map(q => getQuarterlyQuota(rep, q));
-                    const tot = q.reduce((s, v) => s + v, 0);
-                    return (
-                      <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                        <td className="px-4 py-2">{rep.name}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[0])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[1])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[2])}</td>
-                        <td className="px-4 py-2 text-right">{fmtK(q[3])}</td>
-                        <td className="px-4 py-2 text-right font-semibold bg-purple-50">{fmtK(tot)}</td>
-                      </tr>
+                      <React.Fragment key={teamName}>
+                        <tr className={`bg-${color}-50`}>
+                          <td colSpan={6} className="px-4 py-2 font-bold">{teamName}</td>
+                        </tr>
+                        {teamReps.map((rep, i) => {
+                          const q = [0,1,2,3].map(qi => getQuarterlyQuota(rep, qi));
+                          const tot = q.reduce((s, v) => s + v, 0);
+                          return (
+                            <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                              <td className="px-4 py-2">{rep.name}</td>
+                              <td className="px-4 py-2 text-right">{fmtK(q[0])}</td>
+                              <td className="px-4 py-2 text-right">{fmtK(q[1])}</td>
+                              <td className="px-4 py-2 text-right">{fmtK(q[2])}</td>
+                              <td className="px-4 py-2 text-right">{fmtK(q[3])}</td>
+                              <td className={`px-4 py-2 text-right font-semibold bg-${color}-50`}>{fmtK(tot)}</td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
                     );
                   })}
                   
@@ -377,13 +405,27 @@ export default function QuotaCapacityPlanner() {
                 value={csvInput}
                 onChange={(e) => setCsvInput(e.target.value)}
                 className="w-full h-32 border border-gray-300 rounded p-3 font-mono text-sm mb-3"
+                placeholder="Paste CSV data here or download template below..."
               />
-              <button onClick={handleCsvUpload} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mr-3">
-                Upload
-              </button>
-              <button onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-                Export
-              </button>
+              <div className="flex gap-3">
+                <button onClick={downloadTemplate} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                  Download Template
+                </button>
+                <button onClick={handleCsvUpload} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                  Upload
+                </button>
+                <button onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                  Export Results
+                </button>
+                <button onClick={() => {
+                  if (confirm('Clear all data? This cannot be undone.')) {
+                    setReps([]);
+                    localStorage.removeItem('capacityPlannerReps');
+                  }
+                }} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                  Clear Data
+                </button>
+              </div>
             </div>
 
             <div className="bg-white rounded-lg shadow overflow-hidden">
