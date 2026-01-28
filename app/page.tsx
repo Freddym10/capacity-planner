@@ -92,57 +92,58 @@ export default function QuotaCapacityPlanner() {
   };
 
   const calculateCapacity = () => {
-    const results: any[] = [];
-    
-    reps.filter(r => r.role === 'AE').forEach(rep => {
-      const ramped = calculateRampedQuota(rep);
-      results.push({
-        ...rep,
-        rampedQuota: ramped,
-        effectiveQuota: ramped
-      });
+  const results: any[] = [];
+  
+  reps.filter((r: any) => r.role === 'AE').forEach((rep: any) => {
+    const ramped = calculateRampedQuota(rep);
+    results.push({
+      ...rep,
+      rampedQuota: ramped,
+      effectiveQuota: ramped
     });
+  });
+  
+  reps.filter((r: any) => r.role === 'Manager').forEach((mgr: any) => {
+    const directs = results.filter((r: any) => r.reportsTo === mgr.name);
+    const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
+    const effective = total * (1 - mgr.haircut / 100);
     
-    reps.filter(r => r.role === 'Manager').forEach(mgr => {
-      const directs = results.filter(r => r.reportsTo === mgr.name);
-      const total = directs.reduce((sum, r) => sum + r.effectiveQuota, 0);
-      const effective = total * (1 - mgr.haircut / 100);
-      
-      results.push({
-        ...mgr,
-        rampedQuota: total,
-        effectiveQuota: effective,
-        directReports: directs
-      });
+    results.push({
+      ...mgr,
+      rampedQuota: total,
+      effectiveQuota: effective,
+      directReports: directs
     });
+  });
+  
+  reps.filter((r: any) => r.role === 'Director').forEach((dir: any) => {
+    const directs = results.filter((r: any) => r.reportsTo === dir.name);
+    const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
+    const effective = total * (1 - dir.haircut / 100);
     
-    reps.filter(r => r.role === 'Director').forEach(dir => {
-      const directs = results.filter(r => r.reportsTo === dir.name);
-      const total = directs.reduce((sum, r) => sum + r.effectiveQuota, 0);
-      const effective = total * (1 - dir.haircut / 100);
-      
-      results.push({
-        ...dir,
-        rampedQuota: total,
-        effectiveQuota: effective,
-        directReports: directs
-      });
+    results.push({
+      ...dir,
+      rampedQuota: total,
+      effectiveQuota: effective,
+      directReports: directs
     });
+  });
+  
+  reps.filter((r: any) => r.role === 'VP').forEach((vp: any) => {
+    const directs = results.filter((r: any) => r.reportsTo === vp.name);
+    const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
+    const effective = total * (1 - vp.haircut / 100);
     
-    reps.filter(r => r.role === 'VP').forEach(vp => {
-      const directs = results.filter(r => r.reportsTo === vp.name);
-      const total = directs.reduce((sum, r) => sum + r.effectiveQuota, 0);
-      const effective = total * (1 - vp.haircut / 100);
-      
-      results.push({
-        ...vp,
-        rampedQuota: total,
-        effectiveQuota: effective,
-        directReports: directs
-      });
+    results.push({
+      ...vp,
+      rampedQuota: total,
+      effectiveQuota: effective,
+      directReports: directs
     });
-    
-    return results;
+  });
+  
+  return results;
+};
   };
 
   const capacity = calculateCapacity();
