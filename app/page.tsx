@@ -225,6 +225,27 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   // Get unique team names dynamically
   const uniqueTeams = [...new Set(aeReps.map(r => r.segment))].sort();
 
+  // Calculate quick stats for grid view
+  const quickStats = {
+    totalAEs: aeReps.length,
+    fullyRamped: aeReps.filter(rep => {
+      const start = new Date(rep.startDate);
+      const now = new Date('2025-01-20');
+      const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
+      return monthsSince >= rep.rampMonths;
+    }).length,
+    ramping: aeReps.filter(rep => {
+      const start = new Date(rep.startDate);
+      const now = new Date('2025-01-20');
+      const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
+      return monthsSince < rep.rampMonths && monthsSince >= 0;
+    }).length,
+    totalTeams: uniqueTeams.length,
+    avgRamp: aeReps.length > 0 ? (aeReps.reduce((sum, r) => sum + r.rampMonths, 0) / aeReps.length).toFixed(1) : 0,
+    totalCapacity: totalRamped,
+    effectiveCapacity: totalEffective
+  };
+
   // Show loading state until mounted on client
   if (!mounted) {
     return (
@@ -344,63 +365,96 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
         )}
 
         {activeView === 'grid' && (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-lg font-semibold">Quarterly Capacity by Team</h2>
+          <>
+            {/* Quick Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total AEs</div>
+                <div className="text-2xl font-bold text-gray-900">{quickStats.totalAEs}</div>
+                <div className="text-xs text-gray-600 mt-1">
+                  <span className="text-green-600 font-medium">{quickStats.fullyRamped} Ramped</span>
+                  {' • '}
+                  <span className="text-blue-600 font-medium">{quickStats.ramping} Ramping</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Capacity</div>
+                <div className="text-2xl font-bold text-blue-600">{fmt(quickStats.totalCapacity)}</div>
+                <div className="text-xs text-gray-600 mt-1">Ramped Quota</div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Effective Capacity</div>
+                <div className="text-2xl font-bold text-green-600">{fmt(quickStats.effectiveCapacity)}</div>
+                <div className="text-xs text-gray-600 mt-1">After Haircuts</div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
+                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Avg Ramp</div>
+                <div className="text-2xl font-bold text-purple-600">{quickStats.avgRamp} mo</div>
+                <div className="text-xs text-gray-600 mt-1">{quickStats.totalTeams} Teams</div>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2">Rep</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q1</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q2</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q3</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q4</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2 bg-blue-50">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {uniqueTeams.map((teamName, teamIndex) => {
-                    const teamReps = aeReps.filter(r => r.segment === teamName);
-                    const colors = ['blue', 'green', 'purple', 'orange', 'pink', 'indigo'];
-                    const color = colors[teamIndex % colors.length];
+
+            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 className="text-lg font-semibold">Quarterly Capacity by Team</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2">Rep</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q1</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q2</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q3</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q4</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2 bg-blue-50">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {uniqueTeams.map((teamName, teamIndex) => {
+                      const teamReps = aeReps.filter(r => r.segment === teamName);
+                      const colors = ['blue', 'green', 'purple', 'orange', 'pink', 'indigo'];
+                      const color = colors[teamIndex % colors.length];
+                      
+                      return (
+                        <React.Fragment key={teamName}>
+                          <tr className={`bg-${color}-50`}>
+                            <td colSpan={6} className="px-4 py-2 font-bold">{teamName}</td>
+                          </tr>
+                          {teamReps.map((rep, i) => {
+                            const q = [0,1,2,3].map(qi => getQuarterlyQuota(rep, qi));
+                            const tot = q.reduce((s, v) => s + v, 0);
+                            return (
+                              <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                                <td className="px-4 py-2">{rep.name}</td>
+                                <td className="px-4 py-2 text-right">{fmtK(q[0])}</td>
+                                <td className="px-4 py-2 text-right">{fmtK(q[1])}</td>
+                                <td className="px-4 py-2 text-right">{fmtK(q[2])}</td>
+                                <td className="px-4 py-2 text-right">{fmtK(q[3])}</td>
+                                <td className={`px-4 py-2 text-right font-semibold bg-${color}-50`}>{fmtK(tot)}</td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
                     
-                    return (
-                      <React.Fragment key={teamName}>
-                        <tr className={`bg-${color}-50`}>
-                          <td colSpan={6} className="px-4 py-2 font-bold">{teamName}</td>
-                        </tr>
-                        {teamReps.map((rep, i) => {
-                          const q = [0,1,2,3].map(qi => getQuarterlyQuota(rep, qi));
-                          const tot = q.reduce((s, v) => s + v, 0);
-                          return (
-                            <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                              <td className="px-4 py-2">{rep.name}</td>
-                              <td className="px-4 py-2 text-right">{fmtK(q[0])}</td>
-                              <td className="px-4 py-2 text-right">{fmtK(q[1])}</td>
-                              <td className="px-4 py-2 text-right">{fmtK(q[2])}</td>
-                              <td className="px-4 py-2 text-right">{fmtK(q[3])}</td>
-                              <td className={`px-4 py-2 text-right font-semibold bg-${color}-50`}>{fmtK(tot)}</td>
-                            </tr>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                  
-                  <tr className="bg-gray-800 text-white font-bold">
-                    <td className="px-4 py-3">TOTAL</td>
-                    <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 0), 0))}</td>
-                    <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 1), 0))}</td>
-                    <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 2), 0))}</td>
-                    <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 3), 0))}</td>
-                    <td className="px-4 py-3 text-right">{fmt(totalRamped)}</td>
-                  </tr>
-                </tbody>
-              </table>
+                    <tr className="bg-gray-800 text-white font-bold">
+                      <td className="px-4 py-3">TOTAL</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 0), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 1), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 2), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s, r) => s + getQuarterlyQuota(r, 3), 0))}</td>
+                      <td className="px-4 py-3 text-right">{fmt(totalRamped)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {activeView === 'summary' && (
@@ -483,17 +537,17 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-sm text-gray-600">
-              <strong className="text-gray-900">CapacityPro</strong> — Built for Revenue Operations
-            </div>
-            <div className="flex gap-6 text-sm text-gray-500">
-              <span>v1.0.0</span>
-              <span>•</span>
-              <span>© 2025</span>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
+<div className="text-sm text-gray-600">
+<strong className="text-gray-900">CapacityPro</strong> — Built for Revenue Operations
+</div>
+<div className="flex gap-6 text-sm text-gray-500">
+<span>v1.0.0</span>
+<span>•</span>
+<span>© 2025</span>
+</div>
+</div>
+</div>
+</footer>
+</div>
+);
 }
