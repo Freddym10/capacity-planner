@@ -235,24 +235,46 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   }
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Sales Capacity Planner</h1>
-        <p className="text-gray-600 mb-6">Simple quota modeling with ramp schedules and haircuts</p>
+    <div className="w-full min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Professional Header */}
+      <header className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
+                <span className="text-white font-bold text-xl">CP</span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">CapacityPro</h1>
+                <p className="text-xs text-gray-500">Sales Planning Made Simple</p>
+              </div>
+            </div>
+            <div className="text-sm text-gray-600">
+              <span className="hidden sm:inline">Built for Revenue Ops</span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        <div className="flex gap-4 mb-8 border-b border-gray-200">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="bg-white rounded-lg shadow-sm mb-8 p-1 inline-flex gap-1">
           <button
             onClick={() => setActiveView('grid')}
-            className={`px-4 py-2 font-medium border-b-2 ${
-              activeView === 'grid' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600'
+            className={`px-6 py-2.5 font-medium rounded-md transition-all ${
+              activeView === 'grid' 
+                ? 'bg-blue-600 text-white shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Grid View
           </button>
           <button
             onClick={() => setActiveView('summary')}
-            className={`px-4 py-2 font-medium border-b-2 ${
-              activeView === 'summary' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600'
+            className={`px-6 py-2.5 font-medium rounded-md transition-all ${
+              activeView === 'summary' 
+                ? 'bg-blue-600 text-white shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
             }`}
           >
             Summary
@@ -322,8 +344,8 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
         )}
 
         {activeView === 'grid' && (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
+          <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <h2 className="text-lg font-semibold">Quarterly Capacity by Team</h2>
             </div>
             <div className="overflow-x-auto">
@@ -384,21 +406,21 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
         {activeView === 'summary' && (
           <>
             <div className="grid grid-cols-3 gap-4 mb-8">
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-100">
                 <div className="text-sm text-gray-600 mb-1">Total AE Quota</div>
                 <div className="text-2xl font-bold text-gray-900">{fmt(totalAEQuota)}</div>
               </div>
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-100">
                 <div className="text-sm text-gray-600 mb-1">Ramped Capacity</div>
                 <div className="text-2xl font-bold text-blue-600">{fmt(totalRamped)}</div>
               </div>
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-100">
                 <div className="text-sm text-gray-600 mb-1">Effective Capacity</div>
                 <div className="text-2xl font-bold text-green-600">{fmt(totalEffective)}</div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8 border border-gray-100">
               <h2 className="text-lg font-semibold mb-3">Upload Rep Data (CSV)</h2>
               <p className="text-sm text-gray-600 mb-3">Format: name,segment,role,reportsTo,startDate,quota,rampMonths,haircut</p>
               <textarea
@@ -407,14 +429,14 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                 className="w-full h-32 border border-gray-300 rounded p-3 font-mono text-sm mb-3"
                 placeholder="Paste CSV data here or download template below..."
               />
-              <div className="flex gap-3">
-                <button onClick={downloadTemplate} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+              <div className="flex gap-3 flex-wrap">
+                <button onClick={downloadTemplate} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
                   Download Template
                 </button>
-                <button onClick={handleCsvUpload} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                <button onClick={handleCsvUpload} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
                   Upload
                 </button>
-                <button onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                <button onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">
                   Export Results
                 </button>
                 <button onClick={() => {
@@ -422,13 +444,16 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                     setReps([]);
                     localStorage.removeItem('capacityPlannerReps');
                   }
-                }} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                }} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors">
                   Clear Data
                 </button>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 className="text-lg font-semibold">All Team Members</h3>
+              </div>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
@@ -440,7 +465,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                 </thead>
                 <tbody>
                   {capacity.map((rep, i) => (
-                    <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                    <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
                       <td className="px-6 py-4">{rep.name}</td>
                       <td className="px-6 py-4">{rep.role}</td>
                       <td className="px-6 py-4 text-right text-blue-600">{fmt(rep.rampedQuota)}</td>
@@ -453,6 +478,22 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
           </>
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 mt-12">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-sm text-gray-600">
+              <strong className="text-gray-900">CapacityPro</strong> — Built for Revenue Operations
+            </div>
+            <div className="flex gap-6 text-sm text-gray-500">
+              <span>v1.0.0</span>
+              <span>•</span>
+              <span>© 2025</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
