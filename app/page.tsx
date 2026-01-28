@@ -222,8 +222,8 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
   const aeReps = reps.filter((r: any) => r.role === 'AE');
 
-  // Get unique team names dynamically
-  const uniqueTeams = [...new Set(aeReps.map((r: any) => r.segment))].sort();
+  // Get unique team names dynamically - FIXED: Added explicit string[] type annotation
+  const uniqueTeams: string[] = [...new Set(aeReps.map((r: any) => r.segment))].sort();
 
   // Calculate quick stats for grid view
   const quickStats = {
@@ -550,4 +550,4 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
       </footer>
     </div>
   );
-} //test
+}
