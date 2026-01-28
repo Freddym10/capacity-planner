@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function QuotaCapacityPlanner() {
   const [activeView, setActiveView] = useState('grid');
   const [selectedRep, setSelectedRep] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState('All Teams');
   
   const [reps, setReps] = useState(() => {
     // Try to load from localStorage first
@@ -225,6 +227,42 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   // Get unique team names dynamically - CRITICAL: Explicit type annotation for Vercel
   const uniqueTeams = [...new Set<string>(aeReps.map((r: any) => r.segment as string))].sort() as string[];
 
+  // Calculate capacity trend data for chart
+  const getCapacityTrendData = () => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    return months.map((month, monthIndex) => {
+      // Filter reps by selected team
+      const filteredReps = selectedTeamFilter === 'All Teams' 
+        ? aeReps 
+        : aeReps.filter((r: any) => r.segment === selectedTeamFilter);
+      
+      // Calculate total monthly capacity (ramped)
+      const monthlyCapacity = filteredReps.reduce((total: number, rep: any) => {
+        return total + getMonthlyQuota(rep, monthIndex);
+      }, 0);
+      
+      // Calculate total monthly quota (what they'd hit at 100% from day 1)
+      const monthlyQuota = filteredReps.reduce((total: number, rep: any) => {
+        return total + (rep.quota / 12);
+      }, 0);
+      
+      // Calculate effective capacity (with haircuts applied)
+      // For simplicity, we'll apply an average haircut based on the org structure
+      // In a real scenario, you'd roll this up through the hierarchy
+      const effectiveCapacity = monthlyCapacity * 0.85; // Assuming ~15% total haircut
+      
+      return {
+        month,
+        quota: Math.round(monthlyQuota),
+        capacity: Math.round(monthlyCapacity),
+        effective: Math.round(effectiveCapacity)
+      };
+    });
+  };
+
+  const capacityTrendData = getCapacityTrendData();
+
   // Calculate quick stats for grid view
   const quickStats = {
     totalAEs: aeReps.length,
@@ -249,29 +287,52 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   // Show loading state until mounted on client
   if (!mounted) {
     return (
-      <div className="w-full min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+      <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 p-6 flex items-center justify-center">
+        <div className="text-slate-600 text-lg">Loading...</div>
       </div>
     );
   }
 
+  // Custom tooltip formatter for the chart
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-4 border border-slate-200 rounded-lg shadow-xl">
+          <p className="text-sm font-semibold text-slate-900 mb-2">{payload[0].payload.month} 2025</p>
+          <div className="space-y-1.5">
+            <p className="text-sm text-slate-600">
+              Quota: <span className="font-semibold">{fmt(payload[0].payload.quota)}</span>
+            </p>
+            <p className="text-sm text-blue-600">
+              Capacity: <span className="font-semibold">{fmt(payload[0].payload.capacity)}</span>
+            </p>
+            <p className="text-sm text-emerald-600">
+              Effective: <span className="font-semibold">{fmt(payload[0].payload.effective)}</span>
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div className="w-full min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Professional Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+    <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      {/* Premium Header */}
+      <header className="bg-white border-b border-slate-200/60 shadow-sm backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
-                <span className="text-white font-bold text-xl">CP</span>
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
+                <span className="text-white font-bold text-xl">C</span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">CapacityPro</h1>
-                <p className="text-xs text-gray-500">Sales Planning Made Simple</p>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">CapacityPro</h1>
+                <p className="text-xs text-slate-500 font-medium">Revenue Capacity Planning</p>
               </div>
             </div>
-            <div className="text-sm text-gray-600">
-              <span className="hidden sm:inline">Built for Revenue Ops</span>
+            <div className="text-sm text-slate-600 font-medium hidden sm:block">
+              Built for Revenue Leaders
             </div>
           </div>
         </div>
@@ -279,69 +340,71 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-lg shadow-sm mb-8 p-1 inline-flex gap-1">
+        {/* View Switcher */}
+        <div className="bg-white rounded-xl shadow-sm mb-8 p-1.5 inline-flex gap-1 border border-slate-200/50">
           <button
             onClick={() => setActiveView('grid')}
-            className={`px-6 py-2.5 font-medium rounded-md transition-all ${
+            className={`px-7 py-2.5 font-semibold rounded-lg transition-all duration-200 text-sm ${
               activeView === 'grid' 
-                ? 'bg-blue-600 text-white shadow-sm' 
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-200' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            Grid View
+            Dashboard
           </button>
           <button
             onClick={() => setActiveView('summary')}
-            className={`px-6 py-2.5 font-medium rounded-md transition-all ${
+            className={`px-7 py-2.5 font-semibold rounded-lg transition-all duration-200 text-sm ${
               activeView === 'summary' 
-                ? 'bg-blue-600 text-white shadow-sm' 
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-200' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            Summary
+            Data Manager
           </button>
         </div>
 
+        {/* Rep Details Modal */}
         {selectedRep && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setSelectedRep(null)}>
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setSelectedRep(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedRep.name}</h2>
-                  <p className="text-gray-600">{selectedRep.role} - {selectedRep.segment}</p>
+                  <h2 className="text-3xl font-bold text-slate-900">{selectedRep.name}</h2>
+                  <p className="text-slate-600 mt-1 font-medium">{selectedRep.role} • {selectedRep.segment}</p>
                 </div>
-                <button onClick={() => setSelectedRep(null)} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+                <button onClick={() => setSelectedRep(null)} className="text-slate-400 hover:text-slate-600 text-3xl leading-none transition-colors">×</button>
               </div>
 
-              <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-2 gap-8 mb-6">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Profile</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Manager:</span>
-                      <span className="font-medium">{selectedRep.manager}</span>
+                  <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">Profile</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between py-2 border-b border-slate-100">
+                      <span className="text-slate-600 font-medium">Manager</span>
+                      <span className="font-semibold text-slate-900">{selectedRep.manager}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Start Date:</span>
-                      <span className="font-medium">{selectedRep.startDate}</span>
+                    <div className="flex justify-between py-2 border-b border-slate-100">
+                      <span className="text-slate-600 font-medium">Start Date</span>
+                      <span className="font-semibold text-slate-900">{selectedRep.startDate}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Months Since Start:</span>
-                      <span className="font-medium">{selectedRep.monthsSinceStart}</span>
+                    <div className="flex justify-between py-2">
+                      <span className="text-slate-600 font-medium">Tenure</span>
+                      <span className="font-semibold text-slate-900">{selectedRep.monthsSinceStart} months</span>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Quota Details</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Annual Quota:</span>
-                      <span className="font-medium">{selectedRep.quota > 0 ? fmt(selectedRep.quota) : 'N/A'}</span>
+                  <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">Quota</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between py-2 border-b border-slate-100">
+                      <span className="text-slate-600 font-medium">Annual Quota</span>
+                      <span className="font-semibold text-slate-900">{selectedRep.quota > 0 ? fmt(selectedRep.quota) : 'N/A'}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Ramped Quota:</span>
-                      <span className="font-medium text-blue-600">{fmt(selectedRep.rampedQuota)}</span>
+                    <div className="flex justify-between py-2">
+                      <span className="text-slate-600 font-medium">Ramped Quota</span>
+                      <span className="font-semibold text-blue-600">{fmt(selectedRep.rampedQuota)}</span>
                     </div>
                   </div>
                 </div>
@@ -349,10 +412,10 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
               {selectedRep.role === 'AE' && (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Ramp Status</h3>
-                  <div className="bg-gray-100 rounded-full h-6 overflow-hidden">
+                  <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Ramp Progress</h3>
+                  <div className="bg-slate-100 rounded-full h-8 overflow-hidden">
                     <div 
-                      className="bg-blue-600 h-full flex items-center justify-center text-white text-xs font-medium"
+                      className="bg-gradient-to-r from-blue-600 to-blue-700 h-full flex items-center justify-center text-white text-sm font-bold shadow-inner"
                       style={{ width: `${selectedRep.rampProgress}%` }}
                     >
                       {selectedRep.rampProgress}%
@@ -366,75 +429,144 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
         {activeView === 'grid' && (
           <>
-            {/* Quick Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total AEs</div>
-                <div className="text-2xl font-bold text-gray-900">{quickStats.totalAEs}</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  <span className="text-green-600 font-medium">{quickStats.fullyRamped} Ramped</span>
-                  {' • '}
-                  <span className="text-blue-600 font-medium">{quickStats.ramping} Ramping</span>
+            {/* Premium Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-blue-200 group">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total AEs</div>
+                <div className="text-3xl font-bold text-slate-900 mb-3">{quickStats.totalAEs}</div>
+                <div className="text-xs text-slate-600 font-medium">
+                  <span className="text-emerald-600 font-bold">{quickStats.fullyRamped} Ramped</span>
+                  <span className="mx-1.5 text-slate-300">•</span>
+                  <span className="text-blue-600 font-bold">{quickStats.ramping} Ramping</span>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Capacity</div>
-                <div className="text-2xl font-bold text-blue-600">{fmt(quickStats.totalCapacity)}</div>
-                <div className="text-xs text-gray-600 mt-1">Ramped Quota</div>
+              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-blue-200 group">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Capacity</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-3">{fmt(quickStats.totalCapacity)}</div>
+                <div className="text-xs text-slate-600 font-medium">Ramped Quota</div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Effective Capacity</div>
-                <div className="text-2xl font-bold text-green-600">{fmt(quickStats.effectiveCapacity)}</div>
-                <div className="text-xs text-gray-600 mt-1">After Haircuts</div>
+              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-emerald-200 group">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Effective Capacity</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent mb-3">{fmt(quickStats.effectiveCapacity)}</div>
+                <div className="text-xs text-slate-600 font-medium">After Haircuts</div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-gray-100">
-                <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Avg Ramp</div>
-                <div className="text-2xl font-bold text-purple-600">{quickStats.avgRamp} mo</div>
-                <div className="text-xs text-gray-600 mt-1">{quickStats.totalTeams} Teams</div>
+              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-purple-200 group">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Avg Ramp</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent mb-3">{quickStats.avgRamp} mo</div>
+                <div className="text-xs text-slate-600 font-medium">{quickStats.totalTeams} Teams</div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-lg font-semibold">Quarterly Capacity by Team</h2>
+            {/* Capacity Trend Chart */}
+            <div className="bg-white rounded-xl shadow-lg border border-slate-100 mb-8 overflow-hidden">
+              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
+                <h2 className="text-lg font-bold text-slate-900">Capacity Trend • 2025</h2>
+                <select
+                  value={selectedTeamFilter}
+                  onChange={(e) => setSelectedTeamFilter(e.target.value)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-slate-300 transition-colors"
+                >
+                  <option value="All Teams">All Teams</option>
+                  {uniqueTeams.map((team: string) => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="p-7">
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={capacityTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="month" 
+                      stroke="#64748b"
+                      style={{ fontSize: '13px', fontWeight: 500 }}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="#64748b"
+                      style={{ fontSize: '13px', fontWeight: 500 }}
+                      tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
+                      tickLine={false}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend 
+                      wrapperStyle={{ paddingTop: '20px' }}
+                      iconType="line"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="quota" 
+                      stroke="#94a3b8" 
+                      strokeWidth={2.5}
+                      strokeDasharray="6 4"
+                      dot={false}
+                      name="Target Quota"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="capacity" 
+                      stroke="#2563eb" 
+                      strokeWidth={3}
+                      dot={{ fill: '#2563eb', r: 5, strokeWidth: 2, stroke: '#fff' }}
+                      activeDot={{ r: 7 }}
+                      name="Ramped Capacity"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="effective" 
+                      stroke="#10b981" 
+                      strokeWidth={3}
+                      dot={{ fill: '#10b981', r: 5, strokeWidth: 2, stroke: '#fff' }}
+                      activeDot={{ r: 7 }}
+                      name="Effective Capacity"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Premium Table */}
+            <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                <h2 className="text-lg font-bold text-slate-900">Quarterly Capacity by Team</h2>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2">Rep</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q1</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q2</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q3</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2">Q4</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700 border-b-2 bg-blue-50">Total</th>
+                      <th className="px-6 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Rep</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q1</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q2</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q3</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q4</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide bg-blue-50">Total</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {uniqueTeams.map((teamName: string, teamIndex: number) => {
                       const teamReps = aeReps.filter((r: any) => r.segment === teamName);
-                      const colors = ['blue', 'green', 'purple', 'orange', 'pink', 'indigo'];
+                      const colors = ['blue', 'emerald', 'purple', 'orange', 'pink', 'indigo'];
                       const color = colors[teamIndex % colors.length];
                       
                       return (
                         <React.Fragment key={teamName}>
-                          <tr className={`bg-${color}-50`}>
-                            <td colSpan={6} className="px-4 py-2 font-bold">{teamName}</td>
+                          <tr className={`bg-${color}-50/50 border-t-2 border-${color}-200`}>
+                            <td colSpan={6} className="px-6 py-3 font-bold text-slate-900 text-sm">{teamName}</td>
                           </tr>
                           {teamReps.map((rep: any, i: number) => {
                             const q = [0,1,2,3].map(qi => getQuarterlyQuota(rep, qi));
                             const tot = q.reduce((s, v) => s + v, 0);
                             return (
-                              <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                                <td className="px-4 py-2">{rep.name}</td>
-                                <td className="px-4 py-2 text-right">{fmtK(q[0])}</td>
-                                <td className="px-4 py-2 text-right">{fmtK(q[1])}</td>
-                                <td className="px-4 py-2 text-right">{fmtK(q[2])}</td>
-                                <td className="px-4 py-2 text-right">{fmtK(q[3])}</td>
-                                <td className={`px-4 py-2 text-right font-semibold bg-${color}-50`}>{fmtK(tot)}</td>
+                              <tr key={i} className="hover:bg-slate-50 cursor-pointer transition-colors group" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                                <td className="px-6 py-4 font-medium text-slate-900">{rep.name}</td>
+                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[0])}</td>
+                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[1])}</td>
+                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[2])}</td>
+                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[3])}</td>
+                                <td className={`px-6 py-4 text-right font-bold text-${color}-700 bg-${color}-50/50`}>{fmtK(tot)}</td>
                               </tr>
                             );
                           })}
@@ -442,13 +574,13 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                       );
                     })}
                     
-                    <tr className="bg-gray-800 text-white font-bold">
-                      <td className="px-4 py-3">TOTAL</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 0), 0))}</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 1), 0))}</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 2), 0))}</td>
-                      <td className="px-4 py-3 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 3), 0))}</td>
-                      <td className="px-4 py-3 text-right">{fmt(totalRamped)}</td>
+                    <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700">
+                      <td className="px-6 py-4 text-sm uppercase tracking-wide">Total</td>
+                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 0), 0))}</td>
+                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 1), 0))}</td>
+                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 2), 0))}</td>
+                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 3), 0))}</td>
+                      <td className="px-6 py-4 text-right text-lg">{fmt(totalRamped)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -459,38 +591,38 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
         {activeView === 'summary' && (
           <>
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-100">
-                <div className="text-sm text-gray-600 mb-1">Total AE Quota</div>
-                <div className="text-2xl font-bold text-gray-900">{fmt(totalAEQuota)}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
+                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Total AE Quota</div>
+                <div className="text-3xl font-bold text-slate-900">{fmt(totalAEQuota)}</div>
               </div>
-              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-100">
-                <div className="text-sm text-gray-600 mb-1">Ramped Capacity</div>
-                <div className="text-2xl font-bold text-blue-600">{fmt(totalRamped)}</div>
+              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
+                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Ramped Capacity</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">{fmt(totalRamped)}</div>
               </div>
-              <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-100">
-                <div className="text-sm text-gray-600 mb-1">Effective Capacity</div>
-                <div className="text-2xl font-bold text-green-600">{fmt(totalEffective)}</div>
+              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
+                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Effective Capacity</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent">{fmt(totalEffective)}</div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md p-6 mb-8 border border-gray-100">
-              <h2 className="text-lg font-semibold mb-3">Upload Rep Data (CSV)</h2>
-              <p className="text-sm text-gray-600 mb-3">Format: name,segment,role,reportsTo,startDate,quota,rampMonths,haircut</p>
+            <div className="bg-white rounded-xl shadow-lg p-7 mb-8 border border-slate-100">
+              <h2 className="text-xl font-bold mb-4 text-slate-900">Upload Rep Data</h2>
+              <p className="text-sm text-slate-600 mb-4 font-medium">CSV Format: name, segment, role, reportsTo, startDate, quota, rampMonths, haircut</p>
               <textarea
                 value={csvInput}
                 onChange={(e) => setCsvInput(e.target.value)}
-                className="w-full h-32 border border-gray-300 rounded p-3 font-mono text-sm mb-3"
-                placeholder="Paste CSV data here or download template below..."
+                className="w-full h-36 border-2 border-slate-200 rounded-xl p-4 font-mono text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                placeholder="Paste CSV data here..."
               />
               <div className="flex gap-3 flex-wrap">
-                <button onClick={downloadTemplate} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
+                <button onClick={downloadTemplate} className="px-5 py-2.5 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
                   Download Template
                 </button>
-                <button onClick={handleCsvUpload} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
-                  Upload
+                <button onClick={handleCsvUpload} className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
+                  Upload Data
                 </button>
-                <button onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">
+                <button onClick={exportCSV} className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
                   Export Results
                 </button>
                 <button onClick={() => {
@@ -498,32 +630,32 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                     setReps([]);
                     localStorage.removeItem('capacityPlannerReps');
                   }
-                }} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors">
-                  Clear Data
+                }} className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
+                  Clear All Data
                 </button>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <h3 className="text-lg font-semibold">All Team Members</h3>
+            <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                <h3 className="text-lg font-bold text-slate-900">All Team Members</h3>
               </div>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-3 text-left">Name</th>
-                    <th className="px-6 py-3 text-left">Role</th>
-                    <th className="px-6 py-3 text-right">Ramped Quota</th>
-                    <th className="px-6 py-3 text-right">Effective</th>
+                    <th className="px-7 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Name</th>
+                    <th className="px-7 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Role</th>
+                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Ramped Quota</th>
+                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Effective</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {capacity.map((rep: any, i: number) => (
-                    <tr key={i} className="border-b hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                      <td className="px-6 py-4">{rep.name}</td>
-                      <td className="px-6 py-4">{rep.role}</td>
-                      <td className="px-6 py-4 text-right text-blue-600">{fmt(rep.rampedQuota)}</td>
-                      <td className="px-6 py-4 text-right text-green-600">{fmt(rep.effectiveQuota)}</td>
+                    <tr key={i} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                      <td className="px-7 py-5 font-semibold text-slate-900">{rep.name}</td>
+                      <td className="px-7 py-5 text-slate-700 font-medium">{rep.role}</td>
+                      <td className="px-7 py-5 text-right text-blue-700 font-bold">{fmt(rep.rampedQuota)}</td>
+                      <td className="px-7 py-5 text-right text-emerald-700 font-bold">{fmt(rep.effectiveQuota)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -533,16 +665,16 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
         )}
       </div>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+      {/* Premium Footer */}
+      <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200/60 mt-16">
+        <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-sm text-gray-600">
-              <strong className="text-gray-900">CapacityPro</strong> — Built for Revenue Operations
+            <div className="text-sm text-slate-600 font-medium">
+              <strong className="text-slate-900 font-bold">CapacityPro</strong> — Professional Revenue Planning
             </div>
-            <div className="flex gap-6 text-sm text-gray-500">
+            <div className="flex gap-6 text-sm text-slate-500 font-medium">
               <span>v1.0.0</span>
-              <span>•</span>
+              <span className="text-slate-300">•</span>
               <span>© 2025</span>
             </div>
           </div>
@@ -550,4 +682,4 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
       </footer>
     </div>
   );
-} 
+}
