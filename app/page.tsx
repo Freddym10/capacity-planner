@@ -25,18 +25,18 @@ export default function QuotaCapacityPlanner() {
     return [
       { name: 'Sarah Chen', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2025-01-01', quota: 1200000, rampMonths: 5, haircut: 0 },
       { name: 'James Liu', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2024-10-01', quota: 1200000, rampMonths: 5, haircut: 0 },
-      { name: 'Mike Johnson', segment: 'Enterprise', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
+      { name: 'Mike Johnson', segment: 'Enterprise', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 2160000, rampMonths: 0, haircut: 10 },
       
       { name: 'Emily Rodriguez', segment: 'Mid-Market', role: 'AE', reportsTo: 'Lisa Park', startDate: '2024-11-01', quota: 800000, rampMonths: 4, haircut: 0 },
       { name: 'David Kim', segment: 'Mid-Market', role: 'AE', reportsTo: 'Lisa Park', startDate: '2024-08-01', quota: 800000, rampMonths: 4, haircut: 0 },
-      { name: 'Lisa Park', segment: 'Mid-Market', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
+      { name: 'Lisa Park', segment: 'Mid-Market', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 1440000, rampMonths: 0, haircut: 10 },
       
       { name: 'Chris Taylor', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2024-09-01', quota: 500000, rampMonths: 3, haircut: 0 },
       { name: 'Morgan Smith', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2025-01-15', quota: 500000, rampMonths: 3, haircut: 0 },
-      { name: 'Jessica Wu', segment: 'Commercial', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 10 },
+      { name: 'Jessica Wu', segment: 'Commercial', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 900000, rampMonths: 0, haircut: 10 },
       
-      { name: 'Robert Chen', segment: 'All', role: 'Director', reportsTo: 'Jennifer Martinez', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 15 },
-      { name: 'Jennifer Martinez', segment: 'All', role: 'VP', reportsTo: '', startDate: '2024-01-01', quota: 0, rampMonths: 0, haircut: 20 }
+      { name: 'Robert Chen', segment: 'All', role: 'Director', reportsTo: 'Jennifer Martinez', startDate: '2024-01-01', quota: 4250000, rampMonths: 0, haircut: 15 },
+      { name: 'Jennifer Martinez', segment: 'All', role: 'VP', reportsTo: '', startDate: '2024-01-01', quota: 4000000, rampMonths: 0, haircut: 20 }
     ];
   });
 
@@ -96,51 +96,66 @@ export default function QuotaCapacityPlanner() {
   const calculateCapacity = () => {
     const results: any[] = [];
     
+    // First, calculate all AE capacities
     reps.filter((r: any) => r.role === 'AE').forEach((rep: any) => {
       const ramped = calculateRampedQuota(rep);
       results.push({
         ...rep,
-        rampedQuota: ramped,
-        effectiveQuota: ramped
+        capacity: ramped,        // Active/ramped capacity
+        quota: rep.quota,        // Annual quota
+        effectiveQuota: ramped   // For AEs, effective = capacity
       });
     });
     
+    // Calculate total AE capacity (this is the baseline for all rollups)
+    const totalAECapacity = results.reduce((sum: number, r: any) => sum + r.capacity, 0);
+    
+    // Managers: capacity = sum of direct report AE capacity, quota = capacity with haircut applied
     reps.filter((r: any) => r.role === 'Manager').forEach((mgr: any) => {
-      const directs = results.filter((r: any) => r.reportsTo === mgr.name);
-      const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
-      const effective = total * (1 - mgr.haircut / 100);
+      const directAEs = results.filter((r: any) => r.reportsTo === mgr.name);
+      const managerCapacity = directAEs.reduce((sum: number, r: any) => sum + r.capacity, 0);
+      const managerQuota = managerCapacity * (1 - mgr.haircut / 100); // Haircut used to SET quota
       
       results.push({
         ...mgr,
-        rampedQuota: total,
-        effectiveQuota: effective,
-        directReports: directs
+        capacity: managerCapacity,     // Raw AE capacity rollup
+        quota: managerQuota,            // Quota set with haircut buffer
+        effectiveQuota: managerCapacity, // Effective = actual capacity
+        directReports: directAEs
       });
     });
     
+    // Directors: capacity = sum of their AE capacity (NOT manager quotas), quota = capacity with haircut
     reps.filter((r: any) => r.role === 'Director').forEach((dir: any) => {
-      const directs = results.filter((r: any) => r.reportsTo === dir.name);
-      const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
-      const effective = total * (1 - dir.haircut / 100);
+      // Find all managers reporting to this director
+      const directManagers = results.filter((r: any) => r.reportsTo === dir.name && r.role === 'Manager');
+      // Sum up the AE capacity under those managers
+      const directorCapacity = directManagers.reduce((sum: number, mgr: any) => sum + mgr.capacity, 0);
+      const directorQuota = directorCapacity * (1 - dir.haircut / 100);
       
       results.push({
         ...dir,
-        rampedQuota: total,
-        effectiveQuota: effective,
-        directReports: directs
+        capacity: directorCapacity,      // Raw AE capacity rollup
+        quota: directorQuota,             // Quota set with haircut buffer
+        effectiveQuota: directorCapacity, // Effective = actual capacity
+        directReports: directManagers
       });
     });
     
+    // VPs: capacity = sum of their AE capacity (NOT director quotas), quota = capacity with haircut
     reps.filter((r: any) => r.role === 'VP').forEach((vp: any) => {
-      const directs = results.filter((r: any) => r.reportsTo === vp.name);
-      const total = directs.reduce((sum: number, r: any) => sum + r.effectiveQuota, 0);
-      const effective = total * (1 - vp.haircut / 100);
+      // Find all directors reporting to this VP
+      const directDirectors = results.filter((r: any) => r.reportsTo === vp.name && r.role === 'Director');
+      // Sum up the AE capacity under those directors
+      const vpCapacity = directDirectors.reduce((sum: number, dir: any) => sum + dir.capacity, 0);
+      const vpQuota = vpCapacity * (1 - vp.haircut / 100);
       
       results.push({
         ...vp,
-        rampedQuota: total,
-        effectiveQuota: effective,
-        directReports: directs
+        capacity: vpCapacity,         // Raw AE capacity rollup
+        quota: vpQuota,                // Quota set with haircut buffer
+        effectiveQuota: vpCapacity,    // Effective = actual capacity
+        directReports: directDirectors
       });
     });
     
@@ -149,9 +164,9 @@ export default function QuotaCapacityPlanner() {
 
   const capacity = calculateCapacity();
   const totalAEQuota = reps.filter((r: any) => r.role === 'AE').reduce((sum: number, r: any) => sum + r.quota, 0);
-  const totalRamped = capacity.filter((r: any) => r.role === 'AE').reduce((sum: number, r: any) => sum + r.rampedQuota, 0);
+  const totalAECapacity = capacity.filter((r: any) => r.role === 'AE').reduce((sum: number, r: any) => sum + r.capacity, 0);
   const vp = capacity.find((r: any) => r.role === 'VP');
-  const totalEffective = vp?.effectiveQuota || 0;
+  const totalEffectiveCapacity = vp?.capacity || 0; // VP's capacity = total AE capacity rollup
 
   const handleCsvUpload = () => {
     const lines = csvInput.trim().split('\n');
@@ -176,10 +191,11 @@ export default function QuotaCapacityPlanner() {
   };
 
   const exportCSV = () => {
-    const headers = 'Name,Segment,Role,Annual Quota,Ramped Quota,Effective Quota\n';
-    const rows = capacity.map((r: any) => 
-      `${r.name},${r.segment},${r.role},${r.quota},${Math.round(r.rampedQuota)},${Math.round(r.effectiveQuota)}`
-    ).join('\n');
+    const headers = 'Name,Segment,Role,Annual Quota,Capacity,Coverage %\n';
+    const rows = capacity.map((r: any) => {
+      const coverage = r.quota > 0 ? ((r.capacity / r.quota) * 100).toFixed(1) : 'N/A';
+      return `${r.name},${r.segment},${r.role},${Math.round(r.quota)},${Math.round(r.capacity)},${coverage}%`;
+    }).join('\n');
     
     const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -264,14 +280,20 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   const capacityTrendData = getCapacityTrendData();
 
   // Calculate quick stats for grid view
+  const fullyRampedAEs = aeReps.filter((rep: any) => {
+    const start = new Date(rep.startDate);
+    const now = new Date('2025-01-20');
+    const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
+    return monthsSince >= rep.rampMonths;
+  });
+  
+  const fullyRampedCapacity = fullyRampedAEs.reduce((sum: number, rep: any) => {
+    return sum + calculateRampedQuota(rep);
+  }, 0);
+  
   const quickStats = {
     totalAEs: aeReps.length,
-    fullyRamped: aeReps.filter((rep: any) => {
-      const start = new Date(rep.startDate);
-      const now = new Date('2025-01-20');
-      const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
-      return monthsSince >= rep.rampMonths;
-    }).length,
+    fullyRamped: fullyRampedAEs.length,
     ramping: aeReps.filter((rep: any) => {
       const start = new Date(rep.startDate);
       const now = new Date('2025-01-20');
@@ -280,8 +302,8 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     }).length,
     totalTeams: uniqueTeams.length,
     avgRamp: aeReps.length > 0 ? (aeReps.reduce((sum: number, r: any) => sum + r.rampMonths, 0) / aeReps.length).toFixed(1) : 0,
-    totalCapacity: totalRamped,
-    effectiveCapacity: totalEffective
+    totalCapacity: totalAECapacity,
+    fullyRampedCapacity: fullyRampedCapacity
   };
 
   // Show loading state until mounted on client
@@ -400,11 +422,17 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between py-2 border-b border-slate-100">
                       <span className="text-slate-600 font-medium">Annual Quota</span>
-                      <span className="font-semibold text-slate-900">{selectedRep.quota > 0 ? fmt(selectedRep.quota) : 'N/A'}</span>
+                      <span className="font-semibold text-slate-900">{fmt(selectedRep.quota)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-slate-100">
+                      <span className="text-slate-600 font-medium">Capacity</span>
+                      <span className="font-semibold text-blue-600">{fmt(selectedRep.capacity)}</span>
                     </div>
                     <div className="flex justify-between py-2">
-                      <span className="text-slate-600 font-medium">Ramped Quota</span>
-                      <span className="font-semibold text-blue-600">{fmt(selectedRep.rampedQuota)}</span>
+                      <span className="text-slate-600 font-medium">Coverage</span>
+                      <span className={`font-semibold ${selectedRep.quota > 0 && (selectedRep.capacity / selectedRep.quota) >= 1 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                        {selectedRep.quota > 0 ? ((selectedRep.capacity / selectedRep.quota) * 100).toFixed(1) + '%' : 'N/A'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -448,9 +476,9 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
               </div>
 
               <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-emerald-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Effective Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent mb-3">{fmt(quickStats.effectiveCapacity)}</div>
-                <div className="text-xs text-slate-600 font-medium">After Haircuts</div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fully Ramped Capacity</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent mb-3">{fmt(quickStats.fullyRampedCapacity)}</div>
+                <div className="text-xs text-slate-600 font-medium">{quickStats.fullyRamped} AEs at 100%</div>
               </div>
 
               <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-purple-200 group">
@@ -580,7 +608,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                       <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 1), 0))}</td>
                       <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 2), 0))}</td>
                       <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 3), 0))}</td>
-                      <td className="px-6 py-4 text-right text-lg">{fmt(totalRamped)}</td>
+                      <td className="px-6 py-4 text-right text-lg">{fmt(totalAECapacity)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -597,12 +625,12 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                 <div className="text-3xl font-bold text-slate-900">{fmt(totalAEQuota)}</div>
               </div>
               <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
-                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Ramped Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">{fmt(totalRamped)}</div>
+                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Total AE Capacity</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">{fmt(totalAECapacity)}</div>
               </div>
               <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
                 <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Effective Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent">{fmt(totalEffective)}</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent">{fmt(totalEffectiveCapacity)}</div>
               </div>
             </div>
 
@@ -645,19 +673,25 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                   <tr>
                     <th className="px-7 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Name</th>
                     <th className="px-7 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Role</th>
-                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Ramped Quota</th>
-                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Effective</th>
+                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Quota</th>
+                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Capacity</th>
+                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Coverage</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {capacity.map((rep: any, i: number) => (
-                    <tr key={i} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                      <td className="px-7 py-5 font-semibold text-slate-900">{rep.name}</td>
-                      <td className="px-7 py-5 text-slate-700 font-medium">{rep.role}</td>
-                      <td className="px-7 py-5 text-right text-blue-700 font-bold">{fmt(rep.rampedQuota)}</td>
-                      <td className="px-7 py-5 text-right text-emerald-700 font-bold">{fmt(rep.effectiveQuota)}</td>
-                    </tr>
-                  ))}
+                  {capacity.map((rep: any, i: number) => {
+                    const coverage = rep.quota > 0 ? ((rep.capacity / rep.quota) * 100).toFixed(1) : 'N/A';
+                    const coverageColor = rep.quota > 0 && (rep.capacity / rep.quota) >= 1 ? 'text-emerald-700' : 'text-orange-700';
+                    return (
+                      <tr key={i} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                        <td className="px-7 py-5 font-semibold text-slate-900">{rep.name}</td>
+                        <td className="px-7 py-5 text-slate-700 font-medium">{rep.role}</td>
+                        <td className="px-7 py-5 text-right text-slate-900 font-bold">{fmt(rep.quota)}</td>
+                        <td className="px-7 py-5 text-right text-blue-700 font-bold">{fmt(rep.capacity)}</td>
+                        <td className={`px-7 py-5 text-right font-bold ${coverageColor}`}>{typeof coverage === 'string' ? coverage : coverage + '%'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
