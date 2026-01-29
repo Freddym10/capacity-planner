@@ -387,7 +387,11 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
       
       const fullyRampedCapacity = filteredAEs.reduce((total: number, rep: any) => {
         const start = new Date(rep.startDate);
-        const monthsSince = monthIndex - start.getMonth() + (start.getFullYear() === 2024 ? 12 : 0);
+        const currentMonthDate = new Date(2026, monthIndex, 1);
+        
+        // Calculate months between start date and current month
+        const monthsSince = (currentMonthDate.getFullYear() - start.getFullYear()) * 12 + 
+                           (currentMonthDate.getMonth() - start.getMonth());
         
         if (monthsSince >= rep.rampMonths) {
           return total + (rep.quota / 12);
