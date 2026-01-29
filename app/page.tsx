@@ -165,8 +165,6 @@ export default function QuotaCapacityPlanner() {
   const capacity = calculateCapacity();
   const totalAEQuota = reps.filter((r: any) => r.role === 'AE').reduce((sum: number, r: any) => sum + r.quota, 0);
   const totalAECapacity = capacity.filter((r: any) => r.role === 'AE').reduce((sum: number, r: any) => sum + r.capacity, 0);
-  const vp = capacity.find((r: any) => r.role === 'VP');
-  const totalEffectiveCapacity = vp?.capacity || 0; // VP's capacity = total AE capacity rollup
 
   const handleCsvUpload = () => {
     const lines = csvInput.trim().split('\n');
@@ -243,67 +241,79 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   // Get unique team names dynamically - CRITICAL: Explicit type annotation for Vercel
   const uniqueTeams = [...new Set<string>(aeReps.map((r: any) => r.segment as string))].sort() as string[];
 
+  // Filter AEs by selected team for all calculations
+  const filteredAEs = selectedTeamFilter === 'All Teams' 
+    ? aeReps 
+    : aeReps.filter((r: any) => r.segment === selectedTeamFilter);
+
   // Calculate capacity trend data for chart
   const getCapacityTrendData = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     return months.map((month, monthIndex) => {
-      // Filter reps by selected team
-      const filteredReps = selectedTeamFilter === 'All Teams' 
-        ? aeReps 
-        : aeReps.filter((r: any) => r.segment === selectedTeamFilter);
-      
       // Calculate total monthly capacity (ramped)
-      const monthlyCapacity = filteredReps.reduce((total: number, rep: any) => {
+      const monthlyCapacity = filteredAEs.reduce((total: number, rep: any) => {
         return total + getMonthlyQuota(rep, monthIndex);
       }, 0);
       
       // Calculate total monthly quota (what they'd hit at 100% from day 1)
-      const monthlyQuota = filteredReps.reduce((total: number, rep: any) => {
+      const monthlyQuota = filteredAEs.reduce((total: number, rep: any) => {
         return total + (rep.quota / 12);
       }, 0);
       
-      // Calculate effective capacity (with haircuts applied)
-      // For simplicity, we'll apply an average haircut based on the org structure
-      // In a real scenario, you'd roll this up through the hierarchy
-      const effectiveCapacity = monthlyCapacity * 0.85; // Assuming ~15% total haircut
+      // Calculate fully ramped capacity (only AEs at 100%)
+      const fullyRampedCapacity = filteredAEs.reduce((total: number, rep: any) => {
+        const start = new Date(rep.startDate);
+        const currentMonth = new Date(2025, monthIndex, 1);
+        const monthsSince = monthIndex - start.getMonth() + (start.getFullYear() === 2024 ? 12 : 0);
+        
+        // Only count if fully ramped (monthsSince >= rampMonths)
+        if (monthsSince >= rep.rampMonths) {
+          return total + (rep.quota / 12);
+        }
+        return total;
+      }, 0);
       
       return {
         month,
         quota: Math.round(monthlyQuota),
         capacity: Math.round(monthlyCapacity),
-        effective: Math.round(effectiveCapacity)
+        fullyRamped: Math.round(fullyRampedCapacity)
       };
     });
   };
 
   const capacityTrendData = getCapacityTrendData();
 
-  // Calculate quick stats for grid view
-  const fullyRampedAEs = aeReps.filter((rep: any) => {
+  // Calculate quick stats for grid view (filtered by team)
+  const fullyRampedAEs = filteredAEs.filter((rep: any) => {
     const start = new Date(rep.startDate);
     const now = new Date('2025-01-20');
     const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
     return monthsSince >= rep.rampMonths;
   });
   
-  const fullyRampedCapacity = fullyRampedAEs.reduce((sum: number, rep: any) => {
+  const rampingAEs = filteredAEs.filter((rep: any) => {
+    const start = new Date(rep.startDate);
+    const now = new Date('2025-01-20');
+    const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
+    return monthsSince < rep.rampMonths && monthsSince >= 0;
+  });
+
+  // Calculate filtered team's quota and capacity
+  const filteredQuota = filteredAEs.reduce((sum: number, rep: any) => sum + rep.quota, 0);
+  const filteredCapacity = filteredAEs.reduce((sum: number, rep: any) => {
     return sum + calculateRampedQuota(rep);
   }, 0);
-  
+  const filteredCoverage = filteredQuota > 0 ? (filteredCapacity / filteredQuota) * 100 : 0;
+
   const quickStats = {
-    totalAEs: aeReps.length,
+    quota: filteredQuota,
+    capacity: filteredCapacity,
+    coverage: filteredCoverage,
+    totalAEs: filteredAEs.length,
     fullyRamped: fullyRampedAEs.length,
-    ramping: aeReps.filter((rep: any) => {
-      const start = new Date(rep.startDate);
-      const now = new Date('2025-01-20');
-      const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
-      return monthsSince < rep.rampMonths && monthsSince >= 0;
-    }).length,
-    totalTeams: uniqueTeams.length,
-    avgRamp: aeReps.length > 0 ? (aeReps.reduce((sum: number, r: any) => sum + r.rampMonths, 0) / aeReps.length).toFixed(1) : 0,
-    totalCapacity: totalAECapacity,
-    fullyRampedCapacity: fullyRampedCapacity
+    ramping: rampingAEs.length
   };
 
   // Show loading state until mounted on client
@@ -329,7 +339,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
               Capacity: <span className="font-semibold">{fmt(payload[0].payload.capacity)}</span>
             </p>
             <p className="text-sm text-emerald-600">
-              Effective: <span className="font-semibold">{fmt(payload[0].payload.effective)}</span>
+              Fully Ramped: <span className="font-semibold">{fmt(payload[0].payload.fullyRamped)}</span>
             </p>
           </div>
         </div>
@@ -353,8 +363,20 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                 <p className="text-xs text-slate-500 font-medium">Revenue Capacity Planning</p>
               </div>
             </div>
-            <div className="text-sm text-slate-600 font-medium hidden sm:block">
-              Built for Revenue Leaders
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-slate-600 font-medium hidden sm:block">
+                Built for Revenue Leaders
+              </div>
+              <select
+                value={selectedTeamFilter}
+                onChange={(e) => setSelectedTeamFilter(e.target.value)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-slate-300 transition-colors"
+              >
+                <option value="All Teams">All Teams</option>
+                {uniqueTeams.map((team: string) => (
+                  <option key={team} value={team}>{team}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -457,51 +479,49 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
         {activeView === 'grid' && (
           <>
-            {/* Premium Stats Cards */}
+            {/* New Card Layout: Quota | Capacity | Coverage | Headcount */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+              {/* Card 1: Quota */}
+              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-slate-200 group">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Team Quota</div>
+                <div className="text-3xl font-bold text-slate-900 mb-2">{fmt(quickStats.quota)}</div>
+                <div className="text-xs text-slate-600 font-medium">Annual Target</div>
+              </div>
+
+              {/* Card 2: Capacity */}
               <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-blue-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total AEs</div>
-                <div className="text-3xl font-bold text-slate-900 mb-3">{quickStats.totalAEs}</div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Capacity</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-2">{fmt(quickStats.capacity)}</div>
+                <div className="text-xs text-slate-600 font-medium">Ramped Delivery</div>
+              </div>
+
+              {/* Card 3: Coverage */}
+              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-emerald-200 group">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Quota Coverage</div>
+                <div className={`text-3xl font-bold mb-2 ${quickStats.coverage >= 100 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                  {quickStats.coverage.toFixed(1)}%
+                </div>
+                <div className="text-xs text-slate-600 font-medium">
+                  {quickStats.coverage >= 100 ? 'On Track ✓' : 'Below Target'}
+                </div>
+              </div>
+
+              {/* Card 4: Headcount */}
+              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-purple-200 group">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Headcount</div>
+                <div className="text-3xl font-bold text-slate-900 mb-2">{quickStats.totalAEs} AEs</div>
                 <div className="text-xs text-slate-600 font-medium">
                   <span className="text-emerald-600 font-bold">{quickStats.fullyRamped} Ramped</span>
                   <span className="mx-1.5 text-slate-300">•</span>
                   <span className="text-blue-600 font-bold">{quickStats.ramping} Ramping</span>
                 </div>
               </div>
-
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-blue-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-3">{fmt(quickStats.totalCapacity)}</div>
-                <div className="text-xs text-slate-600 font-medium">Ramped Quota</div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-emerald-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fully Ramped Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent mb-3">{fmt(quickStats.fullyRampedCapacity)}</div>
-                <div className="text-xs text-slate-600 font-medium">{quickStats.fullyRamped} AEs at 100%</div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-purple-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Avg Ramp</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent mb-3">{quickStats.avgRamp} mo</div>
-                <div className="text-xs text-slate-600 font-medium">{quickStats.totalTeams} Teams</div>
-              </div>
             </div>
 
             {/* Capacity Trend Chart */}
             <div className="bg-white rounded-xl shadow-lg border border-slate-100 mb-8 overflow-hidden">
-              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
+              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                 <h2 className="text-lg font-bold text-slate-900">Capacity Trend • 2025</h2>
-                <select
-                  value={selectedTeamFilter}
-                  onChange={(e) => setSelectedTeamFilter(e.target.value)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-slate-300 transition-colors"
-                >
-                  <option value="All Teams">All Teams</option>
-                  {uniqueTeams.map((team: string) => (
-                    <option key={team} value={team}>{team}</option>
-                  ))}
-                </select>
               </div>
               <div className="p-7">
                 <ResponsiveContainer width="100%" height={320}>
@@ -540,23 +560,23 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                       strokeWidth={3}
                       dot={{ fill: '#2563eb', r: 5, strokeWidth: 2, stroke: '#fff' }}
                       activeDot={{ r: 7 }}
-                      name="Ramped Capacity"
+                      name="Active Capacity"
                     />
                     <Line 
                       type="monotone" 
-                      dataKey="effective" 
+                      dataKey="fullyRamped" 
                       stroke="#10b981" 
                       strokeWidth={3}
                       dot={{ fill: '#10b981', r: 5, strokeWidth: 2, stroke: '#fff' }}
                       activeDot={{ r: 7 }}
-                      name="Effective Capacity"
+                      name="Fully Ramped Capacity"
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Premium Table */}
+            {/* Premium Table - Filtered by Team */}
             <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
               <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                 <h2 className="text-lg font-bold text-slate-900">Quarterly Capacity by Team</h2>
@@ -574,8 +594,10 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {uniqueTeams.map((teamName: string, teamIndex: number) => {
-                      const teamReps = aeReps.filter((r: any) => r.segment === teamName);
+                    {(selectedTeamFilter === 'All Teams' ? uniqueTeams : [selectedTeamFilter]).map((teamName: string, teamIndex: number) => {
+                      const teamReps = filteredAEs.filter((r: any) => r.segment === teamName);
+                      if (teamReps.length === 0) return null;
+                      
                       const colors = ['blue', 'emerald', 'purple', 'orange', 'pink', 'indigo'];
                       const color = colors[teamIndex % colors.length];
                       
@@ -604,11 +626,11 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                     
                     <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700">
                       <td className="px-6 py-4 text-sm uppercase tracking-wide">Total</td>
-                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 0), 0))}</td>
-                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 1), 0))}</td>
-                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 2), 0))}</td>
-                      <td className="px-6 py-4 text-right">{fmtK(aeReps.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 3), 0))}</td>
-                      <td className="px-6 py-4 text-right text-lg">{fmt(totalAECapacity)}</td>
+                      <td className="px-6 py-4 text-right">{fmtK(filteredAEs.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 0), 0))}</td>
+                      <td className="px-6 py-4 text-right">{fmtK(filteredAEs.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 1), 0))}</td>
+                      <td className="px-6 py-4 text-right">{fmtK(filteredAEs.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 2), 0))}</td>
+                      <td className="px-6 py-4 text-right">{fmtK(filteredAEs.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 3), 0))}</td>
+                      <td className="px-6 py-4 text-right text-lg">{fmt(quickStats.capacity)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -629,8 +651,10 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                 <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">{fmt(totalAECapacity)}</div>
               </div>
               <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
-                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Effective Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent">{fmt(totalEffectiveCapacity)}</div>
+                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Coverage</div>
+                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent">
+                  {totalAEQuota > 0 ? ((totalAECapacity / totalAEQuota) * 100).toFixed(1) + '%' : 'N/A'}
+                </div>
               </div>
             </div>
 
