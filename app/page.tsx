@@ -8,6 +8,7 @@ export default function QuotaCapacityPlanner() {
   const [selectedRep, setSelectedRep] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState('All Teams');
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
   const [reps, setReps] = useState(() => {
     // Try to load from localStorage first
@@ -101,60 +102,53 @@ export default function QuotaCapacityPlanner() {
       const ramped = calculateRampedQuota(rep);
       results.push({
         ...rep,
-        capacity: ramped,        // Active/ramped capacity
-        quota: rep.quota,        // Annual quota
-        effectiveQuota: ramped   // For AEs, effective = capacity
+        capacity: ramped,
+        quota: rep.quota,
+        effectiveQuota: ramped
       });
     });
     
-    // Calculate total AE capacity (this is the baseline for all rollups)
-    const totalAECapacity = results.reduce((sum: number, r: any) => sum + r.capacity, 0);
-    
-    // Managers: capacity = sum of direct report AE capacity, quota = capacity with haircut applied
+    // Managers: capacity = sum of direct report AE capacity
     reps.filter((r: any) => r.role === 'Manager').forEach((mgr: any) => {
       const directAEs = results.filter((r: any) => r.reportsTo === mgr.name);
       const managerCapacity = directAEs.reduce((sum: number, r: any) => sum + r.capacity, 0);
-      const managerQuota = managerCapacity * (1 - mgr.haircut / 100); // Haircut used to SET quota
+      const managerQuota = mgr.quota || (managerCapacity * (1 - mgr.haircut / 100));
       
       results.push({
         ...mgr,
-        capacity: managerCapacity,     // Raw AE capacity rollup
-        quota: managerQuota,            // Quota set with haircut buffer
-        effectiveQuota: managerCapacity, // Effective = actual capacity
+        capacity: managerCapacity,
+        quota: managerQuota,
+        effectiveQuota: managerCapacity,
         directReports: directAEs
       });
     });
     
-    // Directors: capacity = sum of their AE capacity (NOT manager quotas), quota = capacity with haircut
+    // Directors: capacity = sum of their AE capacity
     reps.filter((r: any) => r.role === 'Director').forEach((dir: any) => {
-      // Find all managers reporting to this director
       const directManagers = results.filter((r: any) => r.reportsTo === dir.name && r.role === 'Manager');
-      // Sum up the AE capacity under those managers
       const directorCapacity = directManagers.reduce((sum: number, mgr: any) => sum + mgr.capacity, 0);
-      const directorQuota = directorCapacity * (1 - dir.haircut / 100);
+      const directorQuota = dir.quota || (directorCapacity * (1 - dir.haircut / 100));
       
       results.push({
         ...dir,
-        capacity: directorCapacity,      // Raw AE capacity rollup
-        quota: directorQuota,             // Quota set with haircut buffer
-        effectiveQuota: directorCapacity, // Effective = actual capacity
+        capacity: directorCapacity,
+        quota: directorQuota,
+        effectiveQuota: directorCapacity,
         directReports: directManagers
       });
     });
     
-    // VPs: capacity = sum of their AE capacity (NOT director quotas), quota = capacity with haircut
+    // VPs: capacity = sum of their AE capacity
     reps.filter((r: any) => r.role === 'VP').forEach((vp: any) => {
-      // Find all directors reporting to this VP
       const directDirectors = results.filter((r: any) => r.reportsTo === vp.name && r.role === 'Director');
-      // Sum up the AE capacity under those directors
       const vpCapacity = directDirectors.reduce((sum: number, dir: any) => sum + dir.capacity, 0);
-      const vpQuota = vpCapacity * (1 - vp.haircut / 100);
+      const vpQuota = vp.quota || (vpCapacity * (1 - vp.haircut / 100));
       
       results.push({
         ...vp,
-        capacity: vpCapacity,         // Raw AE capacity rollup
-        quota: vpQuota,                // Quota set with haircut buffer
-        effectiveQuota: vpCapacity,    // Effective = actual capacity
+        capacity: vpCapacity,
+        quota: vpQuota,
+        effectiveQuota: vpCapacity,
         directReports: directDirectors
       });
     });
@@ -237,8 +231,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   };
 
   const aeReps = reps.filter((r: any) => r.role === 'AE');
-
-  // Get unique team names dynamically - CRITICAL: Explicit type annotation for Vercel
   const uniqueTeams = [...new Set<string>(aeReps.map((r: any) => r.segment as string))].sort() as string[];
 
   // Filter AEs by selected team for all calculations
@@ -246,28 +238,150 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     ? aeReps 
     : aeReps.filter((r: any) => r.segment === selectedTeamFilter);
 
-  // Calculate capacity trend data for chart
+  // Hierarchy functions
+  const toggleRow = (name: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(name)) {
+      newExpanded.delete(name);
+    } else {
+      newExpanded.add(name);
+    }
+    setExpandedRows(newExpanded);
+  };
+
+  const expandAll = () => {
+    const allNames = new Set<string>();
+    capacity.forEach((person: any) => {
+      if (person.role !== 'AE') {
+        allNames.add(person.name);
+      }
+    });
+    setExpandedRows(allNames);
+  };
+
+  const collapseAll = () => {
+    setExpandedRows(new Set());
+  };
+
+  // Count AEs under a person recursively
+  const countAEs = (person: any): number => {
+    if (person.role === 'AE') return 1;
+    if (!person.directReports) return 0;
+    
+    return person.directReports.reduce((sum: number, child: any) => {
+      return sum + countAEs(child);
+    }, 0);
+  };
+
+  // Count direct reports by type
+  const getDirectReportSummary = (person: any): string => {
+    if (!person.directReports || person.directReports.length === 0) return '';
+    
+    const byRole: any = {};
+    person.directReports.forEach((child: any) => {
+      const role = child.role === 'AE' ? 'AE' : child.role.toLowerCase();
+      byRole[role] = (byRole[role] || 0) + 1;
+    });
+    
+    const parts: string[] = [];
+    if (byRole['manager']) parts.push(`${byRole['manager']} manager${byRole['manager'] > 1 ? 's' : ''}`);
+    if (byRole['director']) parts.push(`${byRole['director']} director${byRole['director'] > 1 ? 's' : ''}`);
+    if (byRole['AE']) parts.push(`${byRole['AE']} AE${byRole['AE'] > 1 ? 's' : ''}`);
+    
+    const totalAEs = countAEs(person);
+    if (totalAEs > 0 && person.role !== 'Manager') {
+      return `${parts.join(', ')} • ${totalAEs} AE${totalAEs > 1 ? 's' : ''} total`;
+    }
+    
+    return parts.join(', ');
+  };
+
+  // Render hierarchy row recursively
+  const renderHierarchyRow = (person: any, level: number): React.ReactNode[] => {
+    const isExpanded = expandedRows.has(person.name);
+    const hasChildren = person.directReports && person.directReports.length > 0;
+    const coverage = person.quota > 0 ? (person.capacity / person.quota) * 100 : 0;
+    const coverageColor = coverage >= 100 ? 'text-emerald-700' : 'text-orange-700';
+    const aeCount = countAEs(person);
+    const summary = getDirectReportSummary(person);
+    
+    const indent = level * 2.5; // rem units
+    
+    const rows: React.ReactNode[] = [];
+    
+    // Main row
+    rows.push(
+      <tr 
+        key={person.name} 
+        className="hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-100"
+        onClick={() => {
+          if (person.role === 'AE') {
+            setSelectedRep(getRepDetails(person.name));
+          } else if (hasChildren) {
+            toggleRow(person.name);
+          }
+        }}
+      >
+        <td className="px-6 py-4" style={{ paddingLeft: `${indent + 1.5}rem` }}>
+          <div className="flex items-center gap-2">
+            {hasChildren && (
+              <span className="text-slate-400 font-bold text-lg">
+                {isExpanded ? '▼' : '▶'}
+              </span>
+            )}
+            <div>
+              <div className="font-semibold text-slate-900">{person.name}</div>
+              <div className="text-xs text-slate-500">
+                {person.role}
+                {!isExpanded && summary && (
+                  <span className="ml-2 text-slate-400">({summary})</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </td>
+        <td className="px-6 py-4 text-right font-semibold text-slate-900">{fmt(person.quota)}</td>
+        <td className="px-6 py-4 text-right font-semibold text-blue-700">{fmt(person.capacity)}</td>
+        <td className={`px-6 py-4 text-right font-bold ${coverageColor}`}>
+          {person.quota > 0 ? coverage.toFixed(1) + '%' : 'N/A'}
+        </td>
+        <td className="px-6 py-4 text-right font-semibold text-slate-700">
+          {aeCount > 0 ? aeCount : '-'}
+        </td>
+      </tr>
+    );
+    
+    // Children rows (if expanded)
+    if (isExpanded && hasChildren) {
+      const sortedChildren = [...person.directReports].sort((a: any, b: any) => 
+        a.name.localeCompare(b.name)
+      );
+      
+      sortedChildren.forEach((child: any) => {
+        rows.push(...renderHierarchyRow(child, level + 1));
+      });
+    }
+    
+    return rows;
+  };
+
+  // Get capacity trend data for chart
   const getCapacityTrendData = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     return months.map((month, monthIndex) => {
-      // Calculate total monthly capacity (ramped)
       const monthlyCapacity = filteredAEs.reduce((total: number, rep: any) => {
         return total + getMonthlyQuota(rep, monthIndex);
       }, 0);
       
-      // Calculate total monthly quota (what they'd hit at 100% from day 1)
       const monthlyQuota = filteredAEs.reduce((total: number, rep: any) => {
         return total + (rep.quota / 12);
       }, 0);
       
-      // Calculate fully ramped capacity (only AEs at 100%)
       const fullyRampedCapacity = filteredAEs.reduce((total: number, rep: any) => {
         const start = new Date(rep.startDate);
-        const currentMonth = new Date(2025, monthIndex, 1);
         const monthsSince = monthIndex - start.getMonth() + (start.getFullYear() === 2024 ? 12 : 0);
         
-        // Only count if fully ramped (monthsSince >= rampMonths)
         if (monthsSince >= rep.rampMonths) {
           return total + (rep.quota / 12);
         }
@@ -285,7 +399,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
   const capacityTrendData = getCapacityTrendData();
 
-  // Calculate quick stats for grid view (filtered by team)
+  // Calculate quick stats
   const fullyRampedAEs = filteredAEs.filter((rep: any) => {
     const start = new Date(rep.startDate);
     const now = new Date('2025-01-20');
@@ -300,7 +414,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     return monthsSince < rep.rampMonths && monthsSince >= 0;
   });
 
-  // Calculate filtered team's quota and capacity
   const filteredQuota = filteredAEs.reduce((sum: number, rep: any) => sum + rep.quota, 0);
   const filteredCapacity = filteredAEs.reduce((sum: number, rep: any) => {
     return sum + calculateRampedQuota(rep);
@@ -316,7 +429,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     ramping: rampingAEs.length
   };
 
-  // Show loading state until mounted on client
   if (!mounted) {
     return (
       <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 p-6 flex items-center justify-center">
@@ -325,7 +437,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     );
   }
 
-  // Custom tooltip formatter for the chart
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -395,6 +506,16 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
             }`}
           >
             Dashboard
+          </button>
+          <button
+            onClick={() => setActiveView('hierarchy')}
+            className={`px-7 py-2.5 font-semibold rounded-lg transition-all duration-200 text-sm ${
+              activeView === 'hierarchy' 
+                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-200' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            Hierarchy
           </button>
           <button
             onClick={() => setActiveView('summary')}
@@ -479,23 +600,20 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
         {activeView === 'grid' && (
           <>
-            {/* New Card Layout: Quota | Capacity | Coverage | Headcount */}
+            {/* Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-              {/* Card 1: Quota */}
               <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-slate-200 group">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Team Quota</div>
                 <div className="text-3xl font-bold text-slate-900 mb-2">{fmt(quickStats.quota)}</div>
                 <div className="text-xs text-slate-600 font-medium">Annual Target</div>
               </div>
 
-              {/* Card 2: Capacity */}
               <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-blue-200 group">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Capacity</div>
                 <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-2">{fmt(quickStats.capacity)}</div>
                 <div className="text-xs text-slate-600 font-medium">Ramped Delivery</div>
               </div>
 
-              {/* Card 3: Coverage */}
               <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-emerald-200 group">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Quota Coverage</div>
                 <div className={`text-3xl font-bold mb-2 ${quickStats.coverage >= 100 ? 'text-emerald-600' : 'text-orange-600'}`}>
@@ -506,7 +624,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                 </div>
               </div>
 
-              {/* Card 4: Headcount */}
               <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-purple-200 group">
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Headcount</div>
                 <div className="text-3xl font-bold text-slate-900 mb-2">{quickStats.totalAEs} AEs</div>
@@ -518,7 +635,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
               </div>
             </div>
 
-            {/* Capacity Trend Chart */}
+            {/* Chart */}
             <div className="bg-white rounded-xl shadow-lg border border-slate-100 mb-8 overflow-hidden">
               <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                 <h2 className="text-lg font-bold text-slate-900">Capacity Trend • 2025</h2>
@@ -576,7 +693,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
               </div>
             </div>
 
-            {/* Premium Table - Filtered by Team */}
+            {/* Quarterly Table */}
             <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
               <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                 <h2 className="text-lg font-bold text-slate-900">Quarterly Capacity by Team</h2>
@@ -632,6 +749,51 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                       <td className="px-6 py-4 text-right">{fmtK(filteredAEs.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 3), 0))}</td>
                       <td className="px-6 py-4 text-right text-lg">{fmt(quickStats.capacity)}</td>
                     </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeView === 'hierarchy' && (
+          <>
+      
+
+            {/* Hierarchy Table */}
+            <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
+                <h2 className="text-lg font-bold text-slate-900">Organization Structure</h2>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={expandAll}
+                    className="px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    Expand All
+                  </button>
+                  <button 
+                    onClick={collapseAll}
+                    className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                  >
+                    Collapse All
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Name</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Quota</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Capacity</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Coverage</th>
+                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide"># AEs</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {capacity
+                      .filter((person: any) => person.role === 'VP')
+                      .map((vp: any) => renderHierarchyRow(vp, 0))}
                   </tbody>
                 </table>
               </div>
@@ -723,7 +885,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
         )}
       </div>
 
-      {/* Premium Footer */}
+      {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200/60 mt-16">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
