@@ -86,7 +86,8 @@ export default function QuotaCapacityPlanner() {
     
     if (monthStart < start) return 0;
     
-    const monthsSince = monthIndex - start.getMonth() + (start.getFullYear() === 2024 ? 12 : 0);
+    // Calculate months between start date and current month in 2026
+    const monthsSince = (2026 - start.getFullYear()) * 12 + (monthIndex - start.getMonth());
     let rampPct = 100;
     
     if (monthsSince < rep.rampMonths) {
