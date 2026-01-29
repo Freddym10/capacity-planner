@@ -8,10 +8,10 @@ export default function QuotaCapacityPlanner() {
   const [selectedRep, setSelectedRep] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState('All Teams');
+  const [selectedMonth, setSelectedMonth] = useState(0); // 0 = January, 11 = December
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
   const [reps, setReps] = useState(() => {
-    // Try to load from localStorage first
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('capacityPlannerReps');
       if (saved) {
@@ -22,9 +22,8 @@ export default function QuotaCapacityPlanner() {
         }
       }
     }
-    // Default data if nothing saved
     return [
-      { name: 'Sarah Chen', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2025-01-01', quota: 1200000, rampMonths: 5, haircut: 0 },
+      { name: 'Sarah Chen', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2026-01-01', quota: 1200000, rampMonths: 5, haircut: 0 },
       { name: 'James Liu', segment: 'Enterprise', role: 'AE', reportsTo: 'Mike Johnson', startDate: '2024-10-01', quota: 1200000, rampMonths: 5, haircut: 0 },
       { name: 'Mike Johnson', segment: 'Enterprise', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 2160000, rampMonths: 0, haircut: 10 },
       
@@ -33,7 +32,7 @@ export default function QuotaCapacityPlanner() {
       { name: 'Lisa Park', segment: 'Mid-Market', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 1440000, rampMonths: 0, haircut: 10 },
       
       { name: 'Chris Taylor', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2024-09-01', quota: 500000, rampMonths: 3, haircut: 0 },
-      { name: 'Morgan Smith', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2025-01-15', quota: 500000, rampMonths: 3, haircut: 0 },
+      { name: 'Morgan Smith', segment: 'Commercial', role: 'AE', reportsTo: 'Jessica Wu', startDate: '2026-01-15', quota: 500000, rampMonths: 3, haircut: 0 },
       { name: 'Jessica Wu', segment: 'Commercial', role: 'Manager', reportsTo: 'Robert Chen', startDate: '2024-01-01', quota: 900000, rampMonths: 0, haircut: 10 },
       
       { name: 'Robert Chen', segment: 'All', role: 'Director', reportsTo: 'Jennifer Martinez', startDate: '2024-01-01', quota: 4250000, rampMonths: 0, haircut: 15 },
@@ -43,12 +42,28 @@ export default function QuotaCapacityPlanner() {
 
   const [csvInput, setCsvInput] = useState('');
 
-  // Wait for client-side mount to avoid hydration mismatch
+  const months = [
+    { value: 0, label: 'January 2026' },
+    { value: 1, label: 'February 2026' },
+    { value: 2, label: 'March 2026' },
+    { value: 3, label: 'April 2026' },
+    { value: 4, label: 'May 2026' },
+    { value: 5, label: 'June 2026' },
+    { value: 6, label: 'July 2026' },
+    { value: 7, label: 'August 2026' },
+    { value: 8, label: 'September 2026' },
+    { value: 9, label: 'October 2026' },
+    { value: 10, label: 'November 2026' },
+    { value: 11, label: 'December 2026' }
+  ];
+
   useEffect(() => {
     setMounted(true);
+    // Set default to current month
+    const now = new Date();
+    setSelectedMonth(now.getMonth());
   }, []);
 
-  // Auto-save to localStorage whenever reps change
   useEffect(() => {
     if (mounted) {
       localStorage.setItem('capacityPlannerReps', JSON.stringify(reps));
@@ -58,11 +73,16 @@ export default function QuotaCapacityPlanner() {
   const fmt = (n: number) => '$' + (n / 1000000).toFixed(2) + 'M';
   const fmtK = (n: number) => '$' + Math.round(n / 1000) + 'K';
 
+  // Get current date based on selected month
+  const getCurrentDate = () => {
+    return new Date(2026, selectedMonth, 15); // Mid-month
+  };
+
   const getMonthlyQuota = (rep: any, monthIndex: number) => {
     if (rep.role !== 'AE') return 0;
     
     const start = new Date(rep.startDate);
-    const monthStart = new Date(2025, monthIndex, 1);
+    const monthStart = new Date(2026, monthIndex, 1);
     
     if (monthStart < start) return 0;
     
@@ -97,7 +117,6 @@ export default function QuotaCapacityPlanner() {
   const calculateCapacity = () => {
     const results: any[] = [];
     
-    // First, calculate all AE capacities
     reps.filter((r: any) => r.role === 'AE').forEach((rep: any) => {
       const ramped = calculateRampedQuota(rep);
       results.push({
@@ -108,7 +127,6 @@ export default function QuotaCapacityPlanner() {
       });
     });
     
-    // Managers: capacity = sum of direct report AE capacity
     reps.filter((r: any) => r.role === 'Manager').forEach((mgr: any) => {
       const directAEs = results.filter((r: any) => r.reportsTo === mgr.name);
       const managerCapacity = directAEs.reduce((sum: number, r: any) => sum + r.capacity, 0);
@@ -123,7 +141,6 @@ export default function QuotaCapacityPlanner() {
       });
     });
     
-    // Directors: capacity = sum of their AE capacity
     reps.filter((r: any) => r.role === 'Director').forEach((dir: any) => {
       const directManagers = results.filter((r: any) => r.reportsTo === dir.name && r.role === 'Manager');
       const directorCapacity = directManagers.reduce((sum: number, mgr: any) => sum + mgr.capacity, 0);
@@ -138,7 +155,6 @@ export default function QuotaCapacityPlanner() {
       });
     });
     
-    // VPs: capacity = sum of their AE capacity
     reps.filter((r: any) => r.role === 'VP').forEach((vp: any) => {
       const directDirectors = results.filter((r: any) => r.reportsTo === vp.name && r.role === 'Director');
       const vpCapacity = directDirectors.reduce((sum: number, dir: any) => sum + dir.capacity, 0);
@@ -199,7 +215,7 @@ export default function QuotaCapacityPlanner() {
 
   const downloadTemplate = () => {
     const template = `name,segment,role,reportsTo,startDate,quota,rampMonths,haircut
-John Doe,Sales Team A,AE,Jane Smith,2025-01-01,1000000,4,0
+John Doe,Sales Team A,AE,Jane Smith,2026-01-01,1000000,4,0
 Jane Smith,Sales Team A,Manager,Bob Johnson,2024-01-01,0,0,10
 Bob Johnson,Sales Team A,Director,Mary Wilson,2024-01-01,0,0,15
 Mary Wilson,All,VP,,2024-01-01,0,0,20`;
@@ -218,7 +234,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     
     const mgr = reps.find((r: any) => r.name === rep.reportsTo);
     const start = new Date(rep.startDate);
-    const now = new Date('2025-01-20');
+    const now = getCurrentDate();
     const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
     const rampProg = rep.role === 'AE' ? Math.min(100, (monthsSince / rep.rampMonths) * 100) : 100;
     
@@ -232,8 +248,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
   const aeReps = reps.filter((r: any) => r.role === 'AE');
   const uniqueTeams = [...new Set<string>(aeReps.map((r: any) => r.segment as string))].sort() as string[];
-
-  // Filter AEs by selected team for all calculations
   const filteredAEs = selectedTeamFilter === 'All Teams' 
     ? aeReps 
     : aeReps.filter((r: any) => r.segment === selectedTeamFilter);
@@ -263,7 +277,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     setExpandedRows(new Set());
   };
 
-  // Count AEs under a person recursively
   const countAEs = (person: any): number => {
     if (person.role === 'AE') return 1;
     if (!person.directReports) return 0;
@@ -273,7 +286,6 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     }, 0);
   };
 
-  // Count direct reports by type
   const getDirectReportSummary = (person: any): string => {
     if (!person.directReports || person.directReports.length === 0) return '';
     
@@ -296,24 +308,21 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     return parts.join(', ');
   };
 
-  // Render hierarchy row recursively
   const renderHierarchyRow = (person: any, level: number): React.ReactNode[] => {
     const isExpanded = expandedRows.has(person.name);
     const hasChildren = person.directReports && person.directReports.length > 0;
     const coverage = person.quota > 0 ? (person.capacity / person.quota) * 100 : 0;
-    const coverageColor = coverage >= 100 ? 'text-emerald-700' : 'text-orange-700';
+    const coverageColor = coverage >= 100 ? 'text-emerald-600' : 'text-amber-500';
     const aeCount = countAEs(person);
     const summary = getDirectReportSummary(person);
     
-    const indent = level * 2.5; // rem units
-    
+    const indent = level * 2.5;
     const rows: React.ReactNode[] = [];
     
-    // Main row
     rows.push(
       <tr 
         key={person.name} 
-        className="hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-100"
+        className="hover:bg-stone-50 cursor-pointer transition-colors border-b border-stone-100"
         onClick={() => {
           if (person.role === 'AE') {
             setSelectedRep(getRepDetails(person.name));
@@ -325,33 +334,32 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
         <td className="px-6 py-4" style={{ paddingLeft: `${indent + 1.5}rem` }}>
           <div className="flex items-center gap-2">
             {hasChildren && (
-              <span className="text-slate-400 font-bold text-lg">
+              <span className="text-stone-400 font-bold text-lg">
                 {isExpanded ? '▼' : '▶'}
               </span>
             )}
             <div>
-              <div className="font-semibold text-slate-900">{person.name}</div>
-              <div className="text-xs text-slate-500">
+              <div className="font-semibold text-stone-900">{person.name}</div>
+              <div className="text-xs text-stone-500">
                 {person.role}
                 {!isExpanded && summary && (
-                  <span className="ml-2 text-slate-400">({summary})</span>
+                  <span className="ml-2 text-stone-400">({summary})</span>
                 )}
               </div>
             </div>
           </div>
         </td>
-        <td className="px-6 py-4 text-right font-semibold text-slate-900">{fmt(person.quota)}</td>
-        <td className="px-6 py-4 text-right font-semibold text-blue-700">{fmt(person.capacity)}</td>
+        <td className="px-6 py-4 text-right font-semibold text-stone-900">{fmt(person.quota)}</td>
+        <td className="px-6 py-4 text-right font-semibold text-indigo-600">{fmt(person.capacity)}</td>
         <td className={`px-6 py-4 text-right font-bold ${coverageColor}`}>
           {person.quota > 0 ? coverage.toFixed(1) + '%' : 'N/A'}
         </td>
-        <td className="px-6 py-4 text-right font-semibold text-slate-700">
+        <td className="px-6 py-4 text-right font-semibold text-stone-700">
           {aeCount > 0 ? aeCount : '-'}
         </td>
       </tr>
     );
     
-    // Children rows (if expanded)
     if (isExpanded && hasChildren) {
       const sortedChildren = [...person.directReports].sort((a: any, b: any) => 
         a.name.localeCompare(b.name)
@@ -365,11 +373,10 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     return rows;
   };
 
-  // Get capacity trend data for chart
   const getCapacityTrendData = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
-    return months.map((month, monthIndex) => {
+    return monthLabels.map((month, monthIndex) => {
       const monthlyCapacity = filteredAEs.reduce((total: number, rep: any) => {
         return total + getMonthlyQuota(rep, monthIndex);
       }, 0);
@@ -399,24 +406,28 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
   const capacityTrendData = getCapacityTrendData();
 
-  // Calculate quick stats
   const fullyRampedAEs = filteredAEs.filter((rep: any) => {
     const start = new Date(rep.startDate);
-    const now = new Date('2025-01-20');
+    const now = getCurrentDate();
     const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
     return monthsSince >= rep.rampMonths;
   });
   
   const rampingAEs = filteredAEs.filter((rep: any) => {
     const start = new Date(rep.startDate);
-    const now = new Date('2025-01-20');
+    const now = getCurrentDate();
     const monthsSince = Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth());
     return monthsSince < rep.rampMonths && monthsSince >= 0;
   });
 
   const filteredQuota = filteredAEs.reduce((sum: number, rep: any) => sum + rep.quota, 0);
   const filteredCapacity = filteredAEs.reduce((sum: number, rep: any) => {
-    return sum + calculateRampedQuota(rep);
+    // Calculate capacity up through selected month (YTD)
+    let ytdCapacity = 0;
+    for (let m = 0; m <= selectedMonth; m++) {
+      ytdCapacity += getMonthlyQuota(rep, m);
+    }
+    return sum + ytdCapacity;
   }, 0);
   const filteredCoverage = filteredQuota > 0 ? (filteredCapacity / filteredQuota) * 100 : 0;
 
@@ -431,8 +442,8 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
   if (!mounted) {
     return (
-      <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 p-6 flex items-center justify-center">
-        <div className="text-slate-600 text-lg">Loading...</div>
+      <div className="w-full min-h-screen bg-gradient-to-br from-stone-50 via-stone-100 to-stone-50 p-6 flex items-center justify-center">
+        <div className="text-stone-600 text-lg">Loading...</div>
       </div>
     );
   }
@@ -440,13 +451,13 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-4 border border-slate-200 rounded-lg shadow-xl">
-          <p className="text-sm font-semibold text-slate-900 mb-2">{payload[0].payload.month} 2025</p>
+        <div className="bg-white p-4 border border-stone-200 rounded-lg shadow-xl">
+          <p className="text-sm font-semibold text-stone-900 mb-2">{payload[0].payload.month} 2026</p>
           <div className="space-y-1.5">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-stone-600">
               Quota: <span className="font-semibold">{fmt(payload[0].payload.quota)}</span>
             </p>
-            <p className="text-sm text-blue-600">
+            <p className="text-sm text-indigo-600">
               Capacity: <span className="font-semibold">{fmt(payload[0].payload.capacity)}</span>
             </p>
             <p className="text-sm text-emerald-600">
@@ -460,28 +471,37 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
   };
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+    <div className="w-full min-h-screen bg-gradient-to-br from-stone-50 via-stone-100 to-stone-50">
       {/* Premium Header */}
-      <header className="bg-white border-b border-slate-200/60 shadow-sm backdrop-blur-sm">
+      <header className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 border-b border-stone-700 shadow-lg">
         <div className="max-w-7xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-11 h-11 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-11 h-11 bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-xl">
                 <span className="text-white font-bold text-xl">C</span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">CapacityPro</h1>
-                <p className="text-xs text-slate-500 font-medium">Revenue Capacity Planning</p>
+                <h1 className="text-2xl font-bold text-white tracking-tight">CapacityPro</h1>
+                <p className="text-xs text-stone-400 font-medium">Revenue Capacity Planning</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-sm text-slate-600 font-medium hidden sm:block">
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-stone-300 font-medium hidden lg:block">
                 Built for Revenue Leaders
               </div>
               <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                className="px-4 py-2 bg-stone-800 border border-stone-700 text-stone-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:border-stone-600 transition-colors"
+              >
+                {months.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+              <select
                 value={selectedTeamFilter}
                 onChange={(e) => setSelectedTeamFilter(e.target.value)}
-                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-slate-300 transition-colors"
+                className="px-4 py-2 bg-stone-800 border border-stone-700 text-stone-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:border-stone-600 transition-colors"
               >
                 <option value="All Teams">All Teams</option>
                 {uniqueTeams.map((team: string) => (
@@ -496,33 +516,33 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* View Switcher */}
-        <div className="bg-white rounded-xl shadow-sm mb-8 p-1.5 inline-flex gap-1 border border-slate-200/50">
+        <div className="bg-white rounded-xl shadow-md mb-8 p-1.5 inline-flex gap-1 border border-stone-200">
           <button
             onClick={() => setActiveView('grid')}
-            className={`px-7 py-2.5 font-semibold rounded-lg transition-all duration-200 text-sm ${
+            className={`px-7 py-2.5 font-bold rounded-lg transition-all duration-200 text-sm ${
               activeView === 'grid' 
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-200' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                ? 'bg-gradient-to-r from-stone-800 to-stone-900 text-white shadow-lg' 
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
             }`}
           >
             Dashboard
           </button>
           <button
             onClick={() => setActiveView('hierarchy')}
-            className={`px-7 py-2.5 font-semibold rounded-lg transition-all duration-200 text-sm ${
+            className={`px-7 py-2.5 font-bold rounded-lg transition-all duration-200 text-sm ${
               activeView === 'hierarchy' 
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-200' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                ? 'bg-gradient-to-r from-stone-800 to-stone-900 text-white shadow-lg' 
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
             }`}
           >
             Hierarchy
           </button>
           <button
             onClick={() => setActiveView('summary')}
-            className={`px-7 py-2.5 font-semibold rounded-lg transition-all duration-200 text-sm ${
+            className={`px-7 py-2.5 font-bold rounded-lg transition-all duration-200 text-sm ${
               activeView === 'summary' 
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-200' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                ? 'bg-gradient-to-r from-stone-800 to-stone-900 text-white shadow-lg' 
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
             }`}
           >
             Data Manager
@@ -531,49 +551,49 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
         {/* Rep Details Modal */}
         {selectedRep && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setSelectedRep(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setSelectedRep(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8" onClick={(e) => e.stopPropagation()}>
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-slate-900">{selectedRep.name}</h2>
-                  <p className="text-slate-600 mt-1 font-medium">{selectedRep.role} • {selectedRep.segment}</p>
+                  <h2 className="text-3xl font-bold text-stone-900">{selectedRep.name}</h2>
+                  <p className="text-stone-600 mt-1 font-medium">{selectedRep.role} • {selectedRep.segment}</p>
                 </div>
-                <button onClick={() => setSelectedRep(null)} className="text-slate-400 hover:text-slate-600 text-3xl leading-none transition-colors">×</button>
+                <button onClick={() => setSelectedRep(null)} className="text-stone-400 hover:text-stone-600 text-3xl leading-none">×</button>
               </div>
 
               <div className="grid grid-cols-2 gap-8 mb-6">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">Profile</h3>
+                  <h3 className="text-sm font-bold text-stone-900 mb-4 uppercase tracking-wide">Profile</h3>
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-600 font-medium">Manager</span>
-                      <span className="font-semibold text-slate-900">{selectedRep.manager}</span>
+                    <div className="flex justify-between py-2 border-b border-stone-100">
+                      <span className="text-stone-600 font-medium">Manager</span>
+                      <span className="font-semibold text-stone-900">{selectedRep.manager}</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-600 font-medium">Start Date</span>
-                      <span className="font-semibold text-slate-900">{selectedRep.startDate}</span>
+                    <div className="flex justify-between py-2 border-b border-stone-100">
+                      <span className="text-stone-600 font-medium">Start Date</span>
+                      <span className="font-semibold text-stone-900">{selectedRep.startDate}</span>
                     </div>
                     <div className="flex justify-between py-2">
-                      <span className="text-slate-600 font-medium">Tenure</span>
-                      <span className="font-semibold text-slate-900">{selectedRep.monthsSinceStart} months</span>
+                      <span className="text-stone-600 font-medium">Tenure</span>
+                      <span className="font-semibold text-stone-900">{selectedRep.monthsSinceStart} months</span>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wide">Quota</h3>
+                  <h3 className="text-sm font-bold text-stone-900 mb-4 uppercase tracking-wide">Quota</h3>
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-600 font-medium">Annual Quota</span>
-                      <span className="font-semibold text-slate-900">{fmt(selectedRep.quota)}</span>
+                    <div className="flex justify-between py-2 border-b border-stone-100">
+                      <span className="text-stone-600 font-medium">Annual Quota</span>
+                      <span className="font-semibold text-stone-900">{fmt(selectedRep.quota)}</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-600 font-medium">Capacity</span>
-                      <span className="font-semibold text-blue-600">{fmt(selectedRep.capacity)}</span>
+                    <div className="flex justify-between py-2 border-b border-stone-100">
+                      <span className="text-stone-600 font-medium">Capacity</span>
+                      <span className="font-semibold text-indigo-600">{fmt(selectedRep.capacity)}</span>
                     </div>
                     <div className="flex justify-between py-2">
-                      <span className="text-slate-600 font-medium">Coverage</span>
-                      <span className={`font-semibold ${selectedRep.quota > 0 && (selectedRep.capacity / selectedRep.quota) >= 1 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                      <span className="text-stone-600 font-medium">Coverage</span>
+                      <span className={`font-semibold ${selectedRep.quota > 0 && (selectedRep.capacity / selectedRep.quota) >= 1 ? 'text-emerald-600' : 'text-amber-500'}`}>
                         {selectedRep.quota > 0 ? ((selectedRep.capacity / selectedRep.quota) * 100).toFixed(1) + '%' : 'N/A'}
                       </span>
                     </div>
@@ -583,10 +603,10 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
               {selectedRep.role === 'AE' && (
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Ramp Progress</h3>
-                  <div className="bg-slate-100 rounded-full h-8 overflow-hidden">
+                  <h3 className="text-sm font-bold text-stone-900 mb-3 uppercase tracking-wide">Ramp Progress</h3>
+                  <div className="bg-stone-100 rounded-full h-8 overflow-hidden">
                     <div 
-                      className="bg-gradient-to-r from-blue-600 to-blue-700 h-full flex items-center justify-center text-white text-sm font-bold shadow-inner"
+                      className="bg-gradient-to-r from-indigo-600 to-purple-600 h-full flex items-center justify-center text-white text-sm font-bold"
                       style={{ width: `${selectedRep.rampProgress}%` }}
                     >
                       {selectedRep.rampProgress}%
@@ -602,69 +622,66 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
           <>
             {/* Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-slate-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Team Quota</div>
-                <div className="text-3xl font-bold text-slate-900 mb-2">{fmt(quickStats.quota)}</div>
-                <div className="text-xs text-slate-600 font-medium">Annual Target</div>
+              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-stone-200">
+                <div className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Team Quota</div>
+                <div className="text-3xl font-bold text-stone-900 mb-2">{fmt(quickStats.quota)}</div>
+                <div className="text-xs text-stone-600 font-medium">Annual Target</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-blue-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-2">{fmt(quickStats.capacity)}</div>
-                <div className="text-xs text-slate-600 font-medium">Ramped Delivery</div>
+              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-stone-200">
+                <div className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Active Capacity</div>
+                <div className="text-3xl font-bold text-indigo-600 mb-2">{fmt(quickStats.capacity)}</div>
+                <div className="text-xs text-stone-600 font-medium">Ramped Delivery</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-emerald-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Quota Coverage</div>
-                <div className={`text-3xl font-bold mb-2 ${quickStats.coverage >= 100 ? 'text-emerald-600' : 'text-orange-600'}`}>
+              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-stone-200">
+                <div className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Quota Coverage</div>
+                <div className={`text-3xl font-bold mb-2 ${quickStats.coverage >= 100 ? 'text-emerald-600' : 'text-amber-500'}`}>
                   {quickStats.coverage.toFixed(1)}%
                 </div>
-                <div className="text-xs text-slate-600 font-medium">
+                <div className="text-xs text-stone-600 font-medium">
                   {quickStats.coverage >= 100 ? 'On Track ✓' : 'Below Target'}
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-slate-100 hover:border-purple-200 group">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Headcount</div>
-                <div className="text-3xl font-bold text-slate-900 mb-2">{quickStats.totalAEs} AEs</div>
-                <div className="text-xs text-slate-600 font-medium">
+              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-stone-200">
+                <div className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Total Headcount</div>
+                <div className="text-3xl font-bold text-stone-900 mb-2">{quickStats.totalAEs} AEs</div>
+                <div className="text-xs text-stone-600 font-medium">
                   <span className="text-emerald-600 font-bold">{quickStats.fullyRamped} Ramped</span>
-                  <span className="mx-1.5 text-slate-300">•</span>
-                  <span className="text-blue-600 font-bold">{quickStats.ramping} Ramping</span>
+                  <span className="mx-1.5 text-stone-300">•</span>
+                  <span className="text-indigo-600 font-bold">{quickStats.ramping} Ramping</span>
                 </div>
               </div>
             </div>
 
             {/* Chart */}
-            <div className="bg-white rounded-xl shadow-lg border border-slate-100 mb-8 overflow-hidden">
-              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                <h2 className="text-lg font-bold text-slate-900">Capacity Trend • 2025</h2>
+            <div className="bg-white rounded-xl shadow-lg border border-stone-200 mb-8 overflow-hidden">
+              <div className="px-7 py-5 border-b border-stone-200 bg-stone-50">
+                <h2 className="text-lg font-bold text-stone-900">Capacity Trend • 2026</h2>
               </div>
               <div className="p-7">
                 <ResponsiveContainer width="100%" height={320}>
                   <LineChart data={capacityTrendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
                     <XAxis 
                       dataKey="month" 
-                      stroke="#64748b"
+                      stroke="#78716c"
                       style={{ fontSize: '13px', fontWeight: 500 }}
                       tickLine={false}
                     />
                     <YAxis 
-                      stroke="#64748b"
+                      stroke="#78716c"
                       style={{ fontSize: '13px', fontWeight: 500 }}
                       tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
                       tickLine={false}
                     />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend 
-                      wrapperStyle={{ paddingTop: '20px' }}
-                      iconType="line"
-                    />
+                    <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="line" />
                     <Line 
                       type="monotone" 
                       dataKey="quota" 
-                      stroke="#94a3b8" 
+                      stroke="#a8a29e" 
                       strokeWidth={2.5}
                       strokeDasharray="6 4"
                       dot={false}
@@ -673,9 +690,9 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                     <Line 
                       type="monotone" 
                       dataKey="capacity" 
-                      stroke="#2563eb" 
+                      stroke="#6366f1" 
                       strokeWidth={3}
-                      dot={{ fill: '#2563eb', r: 5, strokeWidth: 2, stroke: '#fff' }}
+                      dot={{ fill: '#6366f1', r: 5, strokeWidth: 2, stroke: '#fff' }}
                       activeDot={{ r: 7 }}
                       name="Active Capacity"
                     />
@@ -694,45 +711,45 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
             </div>
 
             {/* Quarterly Table */}
-            <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
-              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                <h2 className="text-lg font-bold text-slate-900">Quarterly Capacity by Team</h2>
+            <div className="bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden">
+              <div className="px-7 py-5 border-b border-stone-200 bg-stone-50">
+                <h2 className="text-lg font-bold text-stone-900">Quarterly Capacity by Team</h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
+                  <thead className="bg-stone-50 border-b border-stone-200">
                     <tr>
-                      <th className="px-6 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Rep</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q1</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q2</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q3</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Q4</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide bg-blue-50">Total</th>
+                      <th className="px-6 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Rep</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Q1</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Q2</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Q3</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Q4</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide bg-indigo-50">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-stone-100">
                     {(selectedTeamFilter === 'All Teams' ? uniqueTeams : [selectedTeamFilter]).map((teamName: string, teamIndex: number) => {
                       const teamReps = filteredAEs.filter((r: any) => r.segment === teamName);
                       if (teamReps.length === 0) return null;
                       
-                      const colors = ['blue', 'emerald', 'purple', 'orange', 'pink', 'indigo'];
+                      const colors = ['indigo', 'emerald', 'purple', 'amber', 'rose', 'cyan'];
                       const color = colors[teamIndex % colors.length];
                       
                       return (
                         <React.Fragment key={teamName}>
                           <tr className={`bg-${color}-50/50 border-t-2 border-${color}-200`}>
-                            <td colSpan={6} className="px-6 py-3 font-bold text-slate-900 text-sm">{teamName}</td>
+                            <td colSpan={6} className="px-6 py-3 font-bold text-stone-900 text-sm">{teamName}</td>
                           </tr>
                           {teamReps.map((rep: any, i: number) => {
                             const q = [0,1,2,3].map(qi => getQuarterlyQuota(rep, qi));
                             const tot = q.reduce((s, v) => s + v, 0);
                             return (
-                              <tr key={i} className="hover:bg-slate-50 cursor-pointer transition-colors group" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                                <td className="px-6 py-4 font-medium text-slate-900">{rep.name}</td>
-                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[0])}</td>
-                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[1])}</td>
-                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[2])}</td>
-                                <td className="px-6 py-4 text-right text-slate-700 font-semibold">{fmtK(q[3])}</td>
+                              <tr key={i} className="hover:bg-stone-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                                <td className="px-6 py-4 font-medium text-stone-900">{rep.name}</td>
+                                <td className="px-6 py-4 text-right text-stone-700 font-semibold">{fmtK(q[0])}</td>
+                                <td className="px-6 py-4 text-right text-stone-700 font-semibold">{fmtK(q[1])}</td>
+                                <td className="px-6 py-4 text-right text-stone-700 font-semibold">{fmtK(q[2])}</td>
+                                <td className="px-6 py-4 text-right text-stone-700 font-semibold">{fmtK(q[3])}</td>
                                 <td className={`px-6 py-4 text-right font-bold text-${color}-700 bg-${color}-50/50`}>{fmtK(tot)}</td>
                               </tr>
                             );
@@ -741,7 +758,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                       );
                     })}
                     
-                    <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-700">
+                    <tr className="bg-stone-900 text-white font-bold border-t-2 border-stone-700">
                       <td className="px-6 py-4 text-sm uppercase tracking-wide">Total</td>
                       <td className="px-6 py-4 text-right">{fmtK(filteredAEs.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 0), 0))}</td>
                       <td className="px-6 py-4 text-right">{fmtK(filteredAEs.reduce((s: number, r: any) => s + getQuarterlyQuota(r, 1), 0))}</td>
@@ -758,22 +775,19 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
 
         {activeView === 'hierarchy' && (
           <>
-      
-
-            {/* Hierarchy Table */}
-            <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
-              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
-                <h2 className="text-lg font-bold text-slate-900">Organization Structure</h2>
+            <div className="bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden">
+              <div className="px-7 py-5 border-b border-stone-200 bg-stone-50 flex justify-between items-center">
+                <h2 className="text-lg font-bold text-stone-900">Organization Structure</h2>
                 <div className="flex gap-2">
                   <button 
                     onClick={expandAll}
-                    className="px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                   >
                     Expand All
                   </button>
                   <button 
                     onClick={collapseAll}
-                    className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
                   >
                     Collapse All
                   </button>
@@ -781,13 +795,13 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
+                  <thead className="bg-stone-50 border-b border-stone-200">
                     <tr>
-                      <th className="px-6 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Name</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Quota</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Capacity</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Coverage</th>
-                      <th className="px-6 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide"># AEs</th>
+                      <th className="px-6 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Name</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Quota</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Capacity</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Coverage</th>
+                      <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide"># AEs</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -804,39 +818,39 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
         {activeView === 'summary' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
-                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Total AE Quota</div>
-                <div className="text-3xl font-bold text-slate-900">{fmt(totalAEQuota)}</div>
+              <div className="bg-white rounded-xl shadow-lg p-7 border border-stone-200">
+                <div className="text-sm font-bold text-stone-500 mb-2 uppercase tracking-wide">Total AE Quota</div>
+                <div className="text-3xl font-bold text-stone-900">{fmt(totalAEQuota)}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
-                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Total AE Capacity</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">{fmt(totalAECapacity)}</div>
+              <div className="bg-white rounded-xl shadow-lg p-7 border border-stone-200">
+                <div className="text-sm font-bold text-stone-500 mb-2 uppercase tracking-wide">Total AE Capacity</div>
+                <div className="text-3xl font-bold text-indigo-600">{fmt(totalAECapacity)}</div>
               </div>
-              <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-7 border border-slate-100">
-                <div className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">Coverage</div>
-                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent">
+              <div className="bg-white rounded-xl shadow-lg p-7 border border-stone-200">
+                <div className="text-sm font-bold text-stone-500 mb-2 uppercase tracking-wide">Coverage</div>
+                <div className="text-3xl font-bold text-emerald-600">
                   {totalAEQuota > 0 ? ((totalAECapacity / totalAEQuota) * 100).toFixed(1) + '%' : 'N/A'}
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-lg p-7 mb-8 border border-slate-100">
-              <h2 className="text-xl font-bold mb-4 text-slate-900">Upload Rep Data</h2>
-              <p className="text-sm text-slate-600 mb-4 font-medium">CSV Format: name, segment, role, reportsTo, startDate, quota, rampMonths, haircut</p>
+            <div className="bg-white rounded-xl shadow-lg p-7 mb-8 border border-stone-200">
+              <h2 className="text-xl font-bold mb-4 text-stone-900">Upload Rep Data</h2>
+              <p className="text-sm text-stone-600 mb-4 font-medium">CSV Format: name, segment, role, reportsTo, startDate, quota, rampMonths, haircut</p>
               <textarea
                 value={csvInput}
                 onChange={(e) => setCsvInput(e.target.value)}
-                className="w-full h-36 border-2 border-slate-200 rounded-xl p-4 font-mono text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="w-full h-36 border-2 border-stone-200 rounded-xl p-4 font-mono text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 placeholder="Paste CSV data here..."
               />
               <div className="flex gap-3 flex-wrap">
-                <button onClick={downloadTemplate} className="px-5 py-2.5 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
+                <button onClick={downloadTemplate} className="px-5 py-2.5 bg-stone-700 text-white rounded-lg hover:bg-stone-800 transition-all duration-200 font-bold text-sm shadow-md">
                   Download Template
                 </button>
-                <button onClick={handleCsvUpload} className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
+                <button onClick={handleCsvUpload} className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 font-bold text-sm shadow-md">
                   Upload Data
                 </button>
-                <button onClick={exportCSV} className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
+                <button onClick={exportCSV} className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 font-bold text-sm shadow-md">
                   Export Results
                 </button>
                 <button onClick={() => {
@@ -844,36 +858,36 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                     setReps([]);
                     localStorage.removeItem('capacityPlannerReps');
                   }
-                }} className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 font-semibold text-sm shadow-md hover:shadow-lg">
+                }} className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 font-bold text-sm shadow-md">
                   Clear All Data
                 </button>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
-              <div className="px-7 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                <h3 className="text-lg font-bold text-slate-900">All Team Members</h3>
+            <div className="bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden">
+              <div className="px-7 py-5 border-b border-stone-200 bg-stone-50">
+                <h3 className="text-lg font-bold text-stone-900">All Team Members</h3>
               </div>
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-stone-50 border-b border-stone-200">
                   <tr>
-                    <th className="px-7 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Name</th>
-                    <th className="px-7 py-4 text-left font-bold text-slate-700 text-sm uppercase tracking-wide">Role</th>
-                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Quota</th>
-                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Capacity</th>
-                    <th className="px-7 py-4 text-right font-bold text-slate-700 text-sm uppercase tracking-wide">Coverage</th>
+                    <th className="px-7 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Name</th>
+                    <th className="px-7 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Role</th>
+                    <th className="px-7 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Quota</th>
+                    <th className="px-7 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Capacity</th>
+                    <th className="px-7 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Coverage</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-stone-100">
                   {capacity.map((rep: any, i: number) => {
                     const coverage = rep.quota > 0 ? ((rep.capacity / rep.quota) * 100).toFixed(1) : 'N/A';
-                    const coverageColor = rep.quota > 0 && (rep.capacity / rep.quota) >= 1 ? 'text-emerald-700' : 'text-orange-700';
+                    const coverageColor = rep.quota > 0 && (rep.capacity / rep.quota) >= 1 ? 'text-emerald-600' : 'text-amber-500';
                     return (
-                      <tr key={i} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
-                        <td className="px-7 py-5 font-semibold text-slate-900">{rep.name}</td>
-                        <td className="px-7 py-5 text-slate-700 font-medium">{rep.role}</td>
-                        <td className="px-7 py-5 text-right text-slate-900 font-bold">{fmt(rep.quota)}</td>
-                        <td className="px-7 py-5 text-right text-blue-700 font-bold">{fmt(rep.capacity)}</td>
+                      <tr key={i} className="hover:bg-stone-50 cursor-pointer transition-colors" onClick={() => setSelectedRep(getRepDetails(rep.name))}>
+                        <td className="px-7 py-5 font-semibold text-stone-900">{rep.name}</td>
+                        <td className="px-7 py-5 text-stone-700 font-medium">{rep.role}</td>
+                        <td className="px-7 py-5 text-right text-stone-900 font-bold">{fmt(rep.quota)}</td>
+                        <td className="px-7 py-5 text-right text-indigo-600 font-bold">{fmt(rep.capacity)}</td>
                         <td className={`px-7 py-5 text-right font-bold ${coverageColor}`}>{typeof coverage === 'string' ? coverage : coverage + '%'}</td>
                       </tr>
                     );
@@ -886,16 +900,16 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
       </div>
 
       {/* Footer */}
-      <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200/60 mt-16">
+      <footer className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 border-t border-stone-700 mt-16">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-sm text-slate-600 font-medium">
-              <strong className="text-slate-900 font-bold">CapacityPro</strong> — Professional Revenue Planning
+            <div className="text-sm text-stone-400 font-medium">
+              <strong className="text-white font-bold">CapacityPro</strong> — Professional Revenue Planning
             </div>
-            <div className="flex gap-6 text-sm text-slate-500 font-medium">
+            <div className="flex gap-6 text-sm text-stone-500 font-medium">
               <span>v1.0.0</span>
-              <span className="text-slate-300">•</span>
-              <span>© 2025</span>
+              <span className="text-stone-700">•</span>
+              <span>© 2026</span>
             </div>
           </div>
         </div>
