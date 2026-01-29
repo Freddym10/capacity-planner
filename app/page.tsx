@@ -43,6 +43,7 @@ export default function QuotaCapacityPlanner() {
   const [csvInput, setCsvInput] = useState('');
 
   const months = [
+    { value: -1, label: 'Full Year 2026' },
     { value: 0, label: 'January 2026' },
     { value: 1, label: 'February 2026' },
     { value: 2, label: 'March 2026' },
@@ -59,9 +60,8 @@ export default function QuotaCapacityPlanner() {
 
   useEffect(() => {
     setMounted(true);
-    // Set default to current month
-    const now = new Date();
-    setSelectedMonth(now.getMonth());
+    // Default to Full Year view
+    setSelectedMonth(-1);
   }, []);
 
   useEffect(() => {
@@ -75,6 +75,9 @@ export default function QuotaCapacityPlanner() {
 
   // Get current date based on selected month
   const getCurrentDate = () => {
+    if (selectedMonth === -1) {
+      return new Date(2026, 11, 31); // End of year for Full Year view
+    }
     return new Date(2026, selectedMonth, 15); // Mid-month
   };
 
@@ -425,15 +428,24 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     return monthsSince < rep.rampMonths && monthsSince >= 0;
   });
 
-  const filteredQuota = filteredAEs.reduce((sum: number, rep: any) => sum + rep.quota, 0);
-  const filteredCapacity = filteredAEs.reduce((sum: number, rep: any) => {
-    // Calculate capacity up through selected month (YTD)
-    let ytdCapacity = 0;
-    for (let m = 0; m <= selectedMonth; m++) {
-      ytdCapacity += getMonthlyQuota(rep, m);
-    }
-    return sum + ytdCapacity;
-  }, 0);
+  const filteredQuota = selectedMonth === -1 
+    ? filteredAEs.reduce((sum: number, rep: any) => sum + rep.quota, 0)  // Full year
+    : filteredAEs.reduce((sum: number, rep: any) => sum + (rep.quota / 12), 0);  // Monthly
+    
+  const filteredCapacity = selectedMonth === -1
+    ? filteredAEs.reduce((sum: number, rep: any) => {
+        // Full year: sum all 12 months
+        let yearTotal = 0;
+        for (let m = 0; m < 12; m++) {
+          yearTotal += getMonthlyQuota(rep, m);
+        }
+        return sum + yearTotal;
+      }, 0)
+    : filteredAEs.reduce((sum: number, rep: any) => {
+        // Single month: just that month's capacity
+        return sum + getMonthlyQuota(rep, selectedMonth);
+      }, 0);
+      
   const filteredCoverage = filteredQuota > 0 ? (filteredCapacity / filteredQuota) * 100 : 0;
 
   const quickStats = {
@@ -630,7 +642,7 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
               <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-stone-200">
                 <div className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Team Quota</div>
                 <div className="text-3xl font-bold text-stone-900 mb-2">{fmt(quickStats.quota)}</div>
-                <div className="text-xs text-stone-600 font-medium">Annual Target</div>
+                <div className="text-xs text-stone-600 font-medium">{selectedMonth === -1 ? 'Annual Target' : 'Monthly Target'}</div>
               </div>
 
               <div className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-stone-200">
