@@ -11,6 +11,21 @@ export default function QuotaCapacityPlanner() {
   const [selectedMonth, setSelectedMonth] = useState(0); // 0 = January, 11 = December
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
+  // Management tab state
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [isAdding, setIsAdding] = useState(false);
+  const [newRep, setNewRep] = useState({
+    name: '',
+    segment: 'Enterprise',
+    role: 'AE',
+    reportsTo: '',
+    startDate: '',
+    quota: 0,
+    rampMonths: 0,
+    haircut: 0
+  });
+  
   const [reps, setReps] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('capacityPlannerReps');
@@ -230,6 +245,44 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
     a.href = url;
     a.download = 'capacity_planner_template.csv';
     a.click();
+  };
+
+  // Management tab functions
+  const startEdit = (rep: any) => {
+    setEditingName(rep.name);
+    setEditForm({ ...rep });
+  };
+
+  const cancelEdit = () => {
+    setEditingName(null);
+    setEditForm({});
+  };
+
+  const saveEdit = () => {
+    setReps(reps.map((r: any) => r.name === editingName ? editForm : r));
+    setEditingName(null);
+    setEditForm({});
+  };
+
+  const deleteRep = (name: string) => {
+    if (confirm('Delete this person? This cannot be undone.')) {
+      setReps(reps.filter((r: any) => r.name !== name));
+    }
+  };
+
+  const addNewRep = () => {
+    setReps([...reps, newRep]);
+    setNewRep({
+      name: '',
+      segment: 'Enterprise',
+      role: 'AE',
+      reportsTo: '',
+      startDate: '',
+      quota: 0,
+      rampMonths: 0,
+      haircut: 0
+    });
+    setIsAdding(false);
   };
 
   const getRepDetails = (repName: string) => {
@@ -555,6 +608,16 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
             Hierarchy
           </button>
           <button
+            onClick={() => setActiveView('management')}
+            className={`px-7 py-2.5 font-bold rounded-lg transition-all duration-200 text-sm ${
+              activeView === 'management' 
+                ? 'bg-gradient-to-r from-stone-800 to-stone-900 text-white shadow-lg' 
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+            }`}
+          >
+            Management
+          </button>
+          <button
             onClick={() => setActiveView('summary')}
             className={`px-7 py-2.5 font-bold rounded-lg transition-all duration-200 text-sm ${
               activeView === 'summary' 
@@ -827,6 +890,293 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                       .map((vp: any) => renderHierarchyRow(vp, 0))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeView === 'management' && (
+          <>
+            {/* Header */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-stone-900 mb-2">Management</h2>
+              <p className="text-stone-600">Edit your capacity plan inline. Add, edit, or remove team members.</p>
+            </div>
+
+            {/* Action Bar */}
+            <div className="bg-white rounded-xl shadow-md p-4 mb-6 flex justify-between items-center border border-stone-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsAdding(true)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-bold text-sm shadow-md hover:from-indigo-700 hover:to-purple-700 transition-all"
+                >
+                  + Add Person
+                </button>
+              </div>
+              <div className="text-sm text-stone-600 font-medium">
+                {reps.length} people in plan
+              </div>
+            </div>
+
+            {/* Add New Form */}
+            {isAdding && (
+              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-6 mb-6">
+                <h3 className="text-lg font-bold text-stone-900 mb-4">Add New Person</h3>
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <input
+                    type="text"
+                    placeholder="Name"
+                    value={newRep.name}
+                    onChange={(e) => setNewRep({ ...newRep, name: e.target.value })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <select
+                    value={newRep.segment}
+                    onChange={(e) => setNewRep({ ...newRep, segment: e.target.value })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option>Enterprise</option>
+                    <option>Mid-Market</option>
+                    <option>Commercial</option>
+                  </select>
+                  <select
+                    value={newRep.role}
+                    onChange={(e) => setNewRep({ ...newRep, role: e.target.value })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option>AE</option>
+                    <option>Manager</option>
+                    <option>Director</option>
+                    <option>VP</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Reports To"
+                    value={newRep.reportsTo}
+                    onChange={(e) => setNewRep({ ...newRep, reportsTo: e.target.value })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <input
+                    type="date"
+                    value={newRep.startDate}
+                    onChange={(e) => setNewRep({ ...newRep, startDate: e.target.value })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Annual Quota"
+                    value={newRep.quota || ''}
+                    onChange={(e) => setNewRep({ ...newRep, quota: parseInt(e.target.value) || 0 })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Ramp (months)"
+                    value={newRep.rampMonths || ''}
+                    onChange={(e) => setNewRep({ ...newRep, rampMonths: parseInt(e.target.value) || 0 })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Haircut %"
+                    value={newRep.haircut || ''}
+                    onChange={(e) => setNewRep({ ...newRep, haircut: parseInt(e.target.value) || 0 })}
+                    className="px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={addNewRep}
+                    className="px-5 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsAdding(false)}
+                    className="px-5 py-2 bg-stone-300 text-stone-700 rounded-lg font-bold text-sm hover:bg-stone-400 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Editable Table */}
+            <div className="bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden mb-6">
+              <table className="w-full">
+                <thead className="bg-stone-50 border-b border-stone-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Name</th>
+                    <th className="px-6 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Team</th>
+                    <th className="px-6 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Role</th>
+                    <th className="px-6 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Reports To</th>
+                    <th className="px-6 py-4 text-left font-bold text-stone-700 text-sm uppercase tracking-wide">Start Date</th>
+                    <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Quota</th>
+                    <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Ramp</th>
+                    <th className="px-6 py-4 text-right font-bold text-stone-700 text-sm uppercase tracking-wide">Haircut</th>
+                    <th className="px-6 py-4 text-center font-bold text-stone-700 text-sm uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {reps.map((rep: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-stone-50 transition-colors">
+                      {editingName === rep.name ? (
+                        // Edit mode
+                        <>
+                          <td className="px-6 py-3">
+                            <input
+                              type="text"
+                              value={editForm.name}
+                              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </td>
+                          <td className="px-6 py-3">
+                            <select
+                              value={editForm.segment}
+                              onChange={(e) => setEditForm({ ...editForm, segment: e.target.value })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              <option>Enterprise</option>
+                              <option>Mid-Market</option>
+                              <option>Commercial</option>
+                              <option>All</option>
+                            </select>
+                          </td>
+                          <td className="px-6 py-3">
+                            <select
+                              value={editForm.role}
+                              onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              <option>AE</option>
+                              <option>Manager</option>
+                              <option>Director</option>
+                              <option>VP</option>
+                            </select>
+                          </td>
+                          <td className="px-6 py-3">
+                            <input
+                              type="text"
+                              value={editForm.reportsTo}
+                              onChange={(e) => setEditForm({ ...editForm, reportsTo: e.target.value })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </td>
+                          <td className="px-6 py-3">
+                            <input
+                              type="date"
+                              value={editForm.startDate}
+                              onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </td>
+                          <td className="px-6 py-3">
+                            <input
+                              type="number"
+                              value={editForm.quota}
+                              onChange={(e) => setEditForm({ ...editForm, quota: parseInt(e.target.value) || 0 })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </td>
+                          <td className="px-6 py-3">
+                            <input
+                              type="number"
+                              value={editForm.rampMonths}
+                              onChange={(e) => setEditForm({ ...editForm, rampMonths: parseInt(e.target.value) || 0 })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </td>
+                          <td className="px-6 py-3">
+                            <input
+                              type="number"
+                              value={editForm.haircut}
+                              onChange={(e) => setEditForm({ ...editForm, haircut: parseInt(e.target.value) || 0 })}
+                              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </td>
+                          <td className="px-6 py-3">
+                            <div className="flex gap-2 justify-center">
+                              <button
+                                onClick={saveEdit}
+                                className="px-3 py-1 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                className="px-3 py-1 bg-stone-300 text-stone-700 rounded text-xs font-bold hover:bg-stone-400"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        // View mode
+                        <>
+                          <td className="px-6 py-4 font-semibold text-stone-900">{rep.name}</td>
+                          <td className="px-6 py-4 text-stone-700">{rep.segment}</td>
+                          <td className="px-6 py-4 text-stone-700">
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                              rep.role === 'VP' ? 'bg-purple-100 text-purple-700' :
+                              rep.role === 'Director' ? 'bg-indigo-100 text-indigo-700' :
+                              rep.role === 'Manager' ? 'bg-blue-100 text-blue-700' :
+                              'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {rep.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-stone-600 text-sm">{rep.reportsTo || '-'}</td>
+                          <td className="px-6 py-4 text-stone-700 text-sm">{rep.startDate}</td>
+                          <td className="px-6 py-4 text-right font-bold text-stone-900">{fmt(rep.quota)}</td>
+                          <td className="px-6 py-4 text-right text-stone-700">{rep.rampMonths}mo</td>
+                          <td className="px-6 py-4 text-right text-stone-700">{rep.haircut}%</td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2 justify-center">
+                              <button
+                                onClick={() => startEdit(rep)}
+                                className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded text-xs font-bold hover:bg-indigo-200"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => deleteRep(rep.name)}
+                                className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-bold hover:bg-red-200"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Summary Footer */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6">
+              <div className="grid grid-cols-4 gap-4 text-center">
+                <div>
+                  <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">Total People</div>
+                  <div className="text-2xl font-bold text-stone-900">{reps.length}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">AEs</div>
+                  <div className="text-2xl font-bold text-emerald-600">{reps.filter((r: any) => r.role === 'AE').length}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">Managers</div>
+                  <div className="text-2xl font-bold text-blue-600">{reps.filter((r: any) => r.role === 'Manager').length}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">Total Quota</div>
+                  <div className="text-2xl font-bold text-indigo-600">{fmt(reps.reduce((s: number, r: any) => s + r.quota, 0))}</div>
+                </div>
               </div>
             </div>
           </>
