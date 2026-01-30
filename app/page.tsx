@@ -25,6 +25,22 @@ export default function QuotaCapacityPlanner() {
     rampMonths: 0,
     haircut: 0
   });
+
+  // Planning tab state
+  const [planningStep, setPlanningStep] = useState(1);
+  const [planningTeams, setPlanningTeams] = useState([
+    { name: 'Enterprise', quota: 5000000, aeCount: 4, aeQuota: 1200000, rampMonths: 5, managerHaircut: 10, directorHaircut: 15 },
+    { name: 'Mid-Market', quota: 3000000, aeCount: 3, aeQuota: 800000, rampMonths: 4, managerHaircut: 10, directorHaircut: 20 },
+    { name: 'Commercial', quota: 2000000, aeCount: 4, aeQuota: 500000, rampMonths: 3, managerHaircut: 8, directorHaircut: 15 },
+  ]);
+  const [hiringPlan, setHiringPlan] = useState([
+    { quarter: 'Q1', team: 'Enterprise', count: 2, startMonth: 'January' },
+    { quarter: 'Q2', team: 'Mid-Market', count: 1, startMonth: 'April' },
+  ]);
+  const [attrition, setAttrition] = useState({
+    annualRate: 15,
+    expectedDepartures: 2
+  });
   
   const [reps, setReps] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -618,6 +634,16 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
             Management
           </button>
           <button
+            onClick={() => setActiveView('planning')}
+            className={`px-7 py-2.5 font-bold rounded-lg transition-all duration-200 text-sm ${
+              activeView === 'planning' 
+                ? 'bg-gradient-to-r from-stone-800 to-stone-900 text-white shadow-lg' 
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+            }`}
+          >
+            Planning
+          </button>
+          <button
             onClick={() => setActiveView('summary')}
             className={`px-7 py-2.5 font-bold rounded-lg transition-all duration-200 text-sm ${
               activeView === 'summary' 
@@ -1178,6 +1204,409 @@ Mary Wilson,All,VP,,2024-01-01,0,0,20`;
                   <div className="text-2xl font-bold text-indigo-600">{fmt(reps.reduce((s: number, r: any) => s + r.quota, 0))}</div>
                 </div>
               </div>
+            </div>
+          </>
+        )}
+
+        {activeView === 'planning' && (
+          <>
+            {/* Header */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-stone-900 mb-2">Planning</h2>
+              <p className="text-stone-600">Build capacity scenarios from scratch. Model hiring plans, team structures, and what-if analyses.</p>
+            </div>
+
+            {/* Progress Stepper */}
+            <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-6 mb-8">
+              <div className="flex items-center justify-between">
+                {[
+                  { num: 1, label: 'Team Setup' },
+                  { num: 2, label: 'Hiring Plan' },
+                  { num: 3, label: 'Attrition' },
+                  { num: 4, label: 'Review' }
+                ].map((s, idx) => (
+                  <React.Fragment key={s.num}>
+                    <div className="flex flex-col items-center cursor-pointer" onClick={() => setPlanningStep(s.num)}>
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all ${
+                        planningStep >= s.num 
+                          ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg' 
+                          : 'bg-stone-200 text-stone-500'
+                      }`}>
+                        {s.num}
+                      </div>
+                      <div className={`mt-2 text-sm font-bold ${planningStep >= s.num ? 'text-stone-900' : 'text-stone-400'}`}>
+                        {s.label}
+                      </div>
+                    </div>
+                    {idx < 3 && (
+                      <div className={`flex-1 h-1 mx-4 rounded-full transition-all ${
+                        planningStep > s.num ? 'bg-indigo-600' : 'bg-stone-200'
+                      }`} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 1: Team Setup */}
+            {planningStep === 1 && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-7">
+                  <h3 className="text-xl font-bold text-stone-900 mb-6">Define Your Teams</h3>
+                  
+                  <div className="space-y-4">
+                    {planningTeams.map((team, idx) => (
+                      <div key={idx} className="bg-stone-50 rounded-lg p-6 border border-stone-200">
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                          <div>
+                            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Team Name</label>
+                            <input
+                              type="text"
+                              value={team.name}
+                              onChange={(e) => {
+                                const updated = [...planningTeams];
+                                updated[idx].name = e.target.value;
+                                setPlanningTeams(updated);
+                              }}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Team Quota</label>
+                            <input
+                              type="number"
+                              value={team.quota}
+                              onChange={(e) => {
+                                const updated = [...planningTeams];
+                                updated[idx].quota = parseInt(e.target.value) || 0;
+                                setPlanningTeams(updated);
+                              }}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2"># of AEs</label>
+                            <input
+                              type="number"
+                              value={team.aeCount}
+                              onChange={(e) => {
+                                const updated = [...planningTeams];
+                                updated[idx].aeCount = parseInt(e.target.value) || 0;
+                                setPlanningTeams(updated);
+                              }}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">AE Quota (each)</label>
+                            <input
+                              type="number"
+                              value={team.aeQuota}
+                              onChange={(e) => {
+                                const updated = [...planningTeams];
+                                updated[idx].aeQuota = parseInt(e.target.value) || 0;
+                                setPlanningTeams(updated);
+                              }}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Ramp (months)</label>
+                            <input
+                              type="number"
+                              value={team.rampMonths}
+                              onChange={(e) => {
+                                const updated = [...planningTeams];
+                                updated[idx].rampMonths = parseInt(e.target.value) || 0;
+                                setPlanningTeams(updated);
+                              }}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Manager Haircut %</label>
+                            <input
+                              type="number"
+                              value={team.managerHaircut}
+                              onChange={(e) => {
+                                const updated = [...planningTeams];
+                                updated[idx].managerHaircut = parseInt(e.target.value) || 0;
+                                setPlanningTeams(updated);
+                              }}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Director Haircut %</label>
+                            <input
+                              type="number"
+                              value={team.directorHaircut}
+                              onChange={(e) => {
+                                const updated = [...planningTeams];
+                                updated[idx].directorHaircut = parseInt(e.target.value) || 0;
+                                setPlanningTeams(updated);
+                              }}
+                              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    className="mt-4 px-5 py-2.5 bg-stone-200 text-stone-700 rounded-lg font-bold text-sm hover:bg-stone-300 transition-all"
+                    onClick={() => setPlanningTeams([...planningTeams, { name: 'New Team', quota: 0, aeCount: 0, aeQuota: 0, rampMonths: 3, managerHaircut: 10, directorHaircut: 15 }])}
+                  >
+                    + Add Team
+                  </button>
+                </div>
+
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6">
+                  <div className="grid grid-cols-3 gap-6 text-center">
+                    <div>
+                      <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">Total Quota</div>
+                      <div className="text-3xl font-bold text-indigo-600">{fmt(planningTeams.reduce((s, t) => s + t.quota, 0))}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">Total AEs</div>
+                      <div className="text-3xl font-bold text-emerald-600">{planningTeams.reduce((s, t) => s + t.aeCount, 0)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">Teams</div>
+                      <div className="text-3xl font-bold text-stone-900">{planningTeams.length}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Hiring Plan */}
+            {planningStep === 2 && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-7">
+                  <h3 className="text-xl font-bold text-stone-900 mb-6">Hiring Timeline</h3>
+                  
+                  <div className="space-y-4">
+                    {hiringPlan.map((hire, idx) => (
+                      <div key={idx} className="bg-stone-50 rounded-lg p-6 border border-stone-200 grid grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Quarter</label>
+                          <select
+                            value={hire.quarter}
+                            onChange={(e) => {
+                              const updated = [...hiringPlan];
+                              updated[idx].quarter = e.target.value;
+                              setHiringPlan(updated);
+                            }}
+                            className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                          >
+                            <option>Q1</option>
+                            <option>Q2</option>
+                            <option>Q3</option>
+                            <option>Q4</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Team</label>
+                          <select
+                            value={hire.team}
+                            onChange={(e) => {
+                              const updated = [...hiringPlan];
+                              updated[idx].team = e.target.value;
+                              setHiringPlan(updated);
+                            }}
+                            className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                          >
+                            {planningTeams.map(t => <option key={t.name}>{t.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2"># of AEs</label>
+                          <input
+                            type="number"
+                            value={hire.count}
+                            onChange={(e) => {
+                              const updated = [...hiringPlan];
+                              updated[idx].count = parseInt(e.target.value) || 0;
+                              setHiringPlan(updated);
+                            }}
+                            className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-2">Start Month</label>
+                          <select
+                            value={hire.startMonth}
+                            onChange={(e) => {
+                              const updated = [...hiringPlan];
+                              updated[idx].startMonth = e.target.value;
+                              setHiringPlan(updated);
+                            }}
+                            className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                          >
+                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(m => <option key={m}>{m}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    className="mt-4 px-5 py-2.5 bg-stone-200 text-stone-700 rounded-lg font-bold text-sm hover:bg-stone-300 transition-all"
+                    onClick={() => setHiringPlan([...hiringPlan, { quarter: 'Q1', team: planningTeams[0].name, count: 1, startMonth: 'January' }])}
+                  >
+                    + Add Hire
+                  </button>
+                </div>
+
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
+                  <div className="text-center">
+                    <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-1">Total New Hires</div>
+                    <div className="text-3xl font-bold text-emerald-600">{hiringPlan.reduce((sum, h) => sum + h.count, 0)} AEs</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Attrition */}
+            {planningStep === 3 && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-7">
+                  <h3 className="text-xl font-bold text-stone-900 mb-6">Attrition Assumptions</h3>
+                  
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="bg-stone-50 rounded-lg p-6 border border-stone-200">
+                      <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-3">Annual Turnover Rate</label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="range"
+                          min="0"
+                          max="30"
+                          value={attrition.annualRate}
+                          onChange={(e) => setAttrition({ ...attrition, annualRate: parseInt(e.target.value) })}
+                          className="flex-1"
+                        />
+                        <div className="text-3xl font-bold text-amber-600 w-20 text-right">{attrition.annualRate}%</div>
+                      </div>
+                      <p className="text-xs text-stone-500 mt-2">Industry average: 10-20%</p>
+                    </div>
+
+                    <div className="bg-stone-50 rounded-lg p-6 border border-stone-200">
+                      <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-3">Expected Departures (2026)</label>
+                      <input
+                        type="number"
+                        value={attrition.expectedDepartures}
+                        onChange={(e) => setAttrition({ ...attrition, expectedDepartures: parseInt(e.target.value) || 0 })}
+                        className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-2xl font-bold"
+                      />
+                      <p className="text-xs text-stone-500 mt-2">Based on rate: ~{Math.round(planningTeams.reduce((s, t) => s + t.aeCount, 0) * attrition.annualRate / 100)} AEs</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl">⚠️</div>
+                    <div>
+                      <div className="font-bold text-stone-900 mb-1">Impact on Capacity</div>
+                      <div className="text-sm text-stone-600">
+                        With {attrition.expectedDepartures} departures, you'll need {attrition.expectedDepartures + hiringPlan.reduce((s, h) => s + h.count, 0)} total new AEs.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Review */}
+            {planningStep === 4 && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-7">
+                  <h3 className="text-xl font-bold text-stone-900 mb-6">Scenario Summary</h3>
+                  
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-4">Team Structure</h4>
+                      <div className="space-y-3">
+                        {planningTeams.map((team, idx) => (
+                          <div key={idx} className="flex justify-between items-center py-2 border-b border-stone-100">
+                            <span className="font-semibold text-stone-900">{team.name}</span>
+                            <span className="text-stone-600">{team.aeCount} AEs • {fmt(team.quota)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center py-2 font-bold">
+                          <span className="text-stone-900">Total</span>
+                          <span className="text-indigo-600">{planningTeams.reduce((s, t) => s + t.aeCount, 0)} AEs • {fmt(planningTeams.reduce((s, t) => s + t.quota, 0))}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-4">Hiring & Attrition</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-stone-100">
+                          <span className="font-semibold text-stone-900">New Hires</span>
+                          <span className="text-emerald-600 font-bold">+{hiringPlan.reduce((s, h) => s + h.count, 0)} AEs</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-stone-100">
+                          <span className="font-semibold text-stone-900">Expected Departures</span>
+                          <span className="text-amber-600 font-bold">-{attrition.expectedDepartures} AEs</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 font-bold">
+                          <span className="text-stone-900">Net Change</span>
+                          <span className="text-indigo-600">
+                            {hiringPlan.reduce((s, h) => s + h.count, 0) - attrition.expectedDepartures > 0 ? '+' : ''}
+                            {hiringPlan.reduce((s, h) => s + h.count, 0) - attrition.expectedDepartures} AEs
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-6">
+                    <div className="text-center">
+                      <div className="text-sm font-bold text-stone-500 uppercase tracking-wide mb-2">Projected Year-End</div>
+                      <div className="text-5xl font-bold text-indigo-600 mb-2">
+                        {planningTeams.reduce((s, t) => s + t.aeCount, 0) + hiringPlan.reduce((s, h) => s + h.count, 0) - attrition.expectedDepartures} AEs
+                      </div>
+                      <div className="text-stone-600">
+                        Targeting {fmt(planningTeams.reduce((s, t) => s + t.quota, 0))} in annual quota
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <button className="flex-1 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-lg shadow-lg hover:from-indigo-700 hover:to-purple-700 transition-all">
+                    Generate Plan
+                  </button>
+                  <button className="px-8 py-4 bg-stone-200 text-stone-700 rounded-xl font-bold text-lg hover:bg-stone-300 transition-all">
+                    Save Scenario
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="flex justify-between mt-8">
+              <button
+                onClick={() => setPlanningStep(Math.max(1, planningStep - 1))}
+                disabled={planningStep === 1}
+                className="px-6 py-3 bg-stone-300 text-stone-700 rounded-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-400 transition-all"
+              >
+                ← Previous
+              </button>
+              <button
+                onClick={() => setPlanningStep(Math.min(4, planningStep + 1))}
+                disabled={planningStep === 4}
+                className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed hover:from-indigo-700 hover:to-purple-700 transition-all"
+              >
+                Next →
+              </button>
             </div>
           </>
         )}
